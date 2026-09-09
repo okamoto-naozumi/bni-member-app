@@ -1,0 +1,437 @@
+import { supabase } from "@/lib/supabase";
+import { uploadMemberPhoto } from "@/lib/memberPhotos";
+
+export interface CustomField {
+  key: string;
+  value: string;
+}
+
+export interface Member {
+  id: string;
+  chapter: string;
+  /** 役職(例: プレジデント、ヴァイスプレジデント、書記兼会計、イベントコーディネーター、メンバー) */
+  role: string;
+  name: string;
+  name_kana: string;
+  company: string;
+  category: string;
+  team: string;
+  wanted_referral: string;
+  comment: string;
+  contact: string;
+  email: string;
+  hp_url: string;
+  /** パターン1: アイコン/グループ編成用(正方形クロップ、円形表示可) */
+  photo_icon_url: string;
+  /** パターン2: メンバーリストPDF掲載用のバストアップ写真 */
+  photo_bust_url: string;
+  custom_fields: CustomField[];
+  /** 一覧の手動並べ替え順(昇順)。ドラッグ&ドロップで更新される。 */
+  sort_order: number;
+  /** デジタル名刺URL(外部の名刺サービス等へのリンク) */
+  digital_card_url: string;
+  line_url: string;
+  instagram_url: string;
+  facebook_url: string;
+  /** ONの場合のみ、まとめページ(/m/[id])へのQRコードを表示する。デフォルトはOFF。 */
+  show_qr_code: boolean;
+  created_at: string;
+}
+
+export interface MemberInput {
+  chapter: string;
+  role: string;
+  name: string;
+  name_kana: string;
+  company: string;
+  category: string;
+  team: string;
+  wanted_referral: string;
+  comment: string;
+  contact: string;
+  email: string;
+  hp_url: string;
+  custom_fields: CustomField[];
+  digital_card_url: string;
+  line_url: string;
+  instagram_url: string;
+  facebook_url: string;
+  show_qr_code: boolean;
+}
+
+export interface MemberPhotoFiles {
+  iconFile?: File | null;
+  bustFile?: File | null;
+}
+
+// v5: フィールド構成変更(QRコード表示用リンク・表示切り替えを追加)に伴いキーを変更し、
+// 旧スキーマのデータが混在してクラッシュしないようにする。
+const DUMMY_STORAGE_KEY = "bni-dummy-members-v5";
+
+/**
+ * 名前から頭文字アバター(サンプル画像)を生成する。
+ * Supabase未設定時や、写真未アップロード時のフォールバックに使用。
+ */
+export function sampleAvatarUrl(name: string): string {
+  const palette = ["F87171", "FB923C", "FBBF24", "34D399", "38BDF8", "818CF8", "F472B6"];
+  let hash = 0;
+  for (const char of name) {
+    hash = (hash * 31 + char.charCodeAt(0)) % palette.length;
+  }
+  const background = palette[Math.abs(hash) % palette.length];
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    name
+  )}&background=${background}&color=ffffff&size=128&bold=true`;
+}
+
+const DUMMY_SEED_MEMBERS: Array<
+  Omit<Member, "photo_icon_url" | "photo_bust_url" | "sort_order"> & { photoName: string }
+> = [
+  {
+    id: "dummy-1",
+    chapter: "BNI サンプルチャプター",
+    role: "プレジデント",
+    name: "佐藤 太郎",
+    name_kana: "サトウ タロウ",
+    category: "税理士",
+    company: "佐藤税務会計事務所",
+    team: "ビジター委員会",
+    wanted_referral: "顧問契約を検討している中小企業の経営者",
+    comment: "中小企業の税務顧問・相続対策を専門としています。",
+    contact: "03-1234-5601",
+    email: "satoh@example.com",
+    hp_url: "https://example.com/satoh-tax",
+    custom_fields: [{ key: "得意分野", value: "相続税申告" }],
+    digital_card_url: "https://example.com/cards/satoh-taro",
+    line_url: "https://line.me/ti/p/example-satoh",
+    instagram_url: "https://instagram.com/example_satoh",
+    facebook_url: "",
+    show_qr_code: true,
+    created_at: "2026-01-10T09:00:00.000Z",
+    photoName: "佐藤 太郎",
+  },
+  {
+    id: "dummy-2",
+    chapter: "BNI サンプルチャプター",
+    role: "ヴァイスプレジデント",
+    name: "鈴木 花子",
+    name_kana: "スズキ ハナコ",
+    category: "社会保険労務士",
+    company: "鈴木社会保険労務士事務所",
+    team: "エデュケーション委員会",
+    wanted_referral: "就業規則の見直しを検討している企業",
+    comment: "労務相談・就業規則の整備を支援します。",
+    contact: "03-1234-5602",
+    email: "suzuki@example.com",
+    hp_url: "https://example.com/suzuki-sr",
+    custom_fields: [],
+    digital_card_url: "",
+    line_url: "",
+    instagram_url: "",
+    facebook_url: "",
+    show_qr_code: false,
+    created_at: "2026-01-12T09:00:00.000Z",
+    photoName: "鈴木 花子",
+  },
+  {
+    id: "dummy-3",
+    chapter: "BNI サンプルチャプター",
+    role: "書記兼会計",
+    name: "高橋 健一",
+    name_kana: "タカハシ ケンイチ",
+    category: "IT・システム開発",
+    company: "高橋システムズ株式会社",
+    team: "PR委員会",
+    wanted_referral: "業務システムの刷新を検討している企業",
+    comment: "業務システムの受託開発、DX支援を行っています。",
+    contact: "03-1234-5603",
+    email: "takahashi@example.com",
+    hp_url: "https://example.com/takahashi-systems",
+    custom_fields: [{ key: "対応技術", value: "React / AWS" }],
+    digital_card_url: "https://example.com/cards/takahashi-kenichi",
+    line_url: "",
+    instagram_url: "",
+    facebook_url: "https://facebook.com/example.takahashi",
+    show_qr_code: true,
+    created_at: "2026-01-15T09:00:00.000Z",
+    photoName: "高橋 健一",
+  },
+  {
+    id: "dummy-4",
+    chapter: "BNI サンプルチャプター",
+    role: "イベントコーディネーター",
+    name: "田中 美咲",
+    name_kana: "タナカ ミサキ",
+    category: "Web制作・デザイン",
+    company: "スタジオTANAKA",
+    team: "メンバーシップ委員会",
+    wanted_referral: "ブランディングを見直したい企業経営者",
+    comment: "コーポレートサイト・ブランディングデザインを手がけています。",
+    contact: "03-1234-5604",
+    email: "tanaka@example.com",
+    hp_url: "https://example.com/studio-tanaka",
+    custom_fields: [],
+    digital_card_url: "",
+    line_url: "",
+    instagram_url: "https://instagram.com/example_tanaka",
+    facebook_url: "",
+    show_qr_code: false,
+    created_at: "2026-01-18T09:00:00.000Z",
+    photoName: "田中 美咲",
+  },
+  {
+    id: "dummy-5",
+    chapter: "BNI サンプルチャプター",
+    role: "メンバー",
+    name: "伊藤 大輔",
+    name_kana: "イトウ ダイスケ",
+    category: "保険代理店",
+    company: "伊藤保険サービス",
+    team: "ビジター委員会",
+    wanted_referral: "法人保険の見直しを検討している経営者",
+    comment: "法人向け損害保険・生命保険のコンサルティング。",
+    contact: "03-1234-5605",
+    email: "ito@example.com",
+    hp_url: "https://example.com/ito-insurance",
+    custom_fields: [],
+    digital_card_url: "",
+    line_url: "https://line.me/ti/p/example-ito",
+    instagram_url: "",
+    facebook_url: "",
+    show_qr_code: false,
+    created_at: "2026-01-20T09:00:00.000Z",
+    photoName: "伊藤 大輔",
+  },
+  {
+    id: "dummy-6",
+    chapter: "BNI サンプルチャプター",
+    role: "メンバー",
+    name: "渡辺 由美",
+    name_kana: "ワタナベ ユミ",
+    category: "不動産",
+    company: "渡辺不動産株式会社",
+    team: "エデュケーション委員会",
+    wanted_referral: "事業用物件を探している法人・個人事業主",
+    comment: "事業用物件の仲介・資産活用のご相談を承ります。",
+    contact: "03-1234-5606",
+    email: "watanabe@example.com",
+    hp_url: "https://example.com/watanabe-estate",
+    custom_fields: [],
+    digital_card_url: "",
+    line_url: "",
+    instagram_url: "",
+    facebook_url: "",
+    show_qr_code: false,
+    created_at: "2026-01-22T09:00:00.000Z",
+    photoName: "渡辺 由美",
+  },
+];
+
+function buildSeedMembers(): Member[] {
+  return DUMMY_SEED_MEMBERS.map(({ photoName, ...member }, index) => {
+    const avatar = sampleAvatarUrl(photoName);
+    return {
+      ...member,
+      photo_icon_url: avatar,
+      photo_bust_url: avatar,
+      sort_order: index,
+    };
+  });
+}
+
+function loadDummyMembers(): Member[] {
+  if (typeof window === "undefined") {
+    return buildSeedMembers();
+  }
+  const raw = window.localStorage.getItem(DUMMY_STORAGE_KEY);
+  if (!raw) {
+    const seeded = buildSeedMembers();
+    window.localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(seeded));
+    return seeded;
+  }
+  try {
+    return JSON.parse(raw) as Member[];
+  } catch {
+    const seeded = buildSeedMembers();
+    window.localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(seeded));
+    return seeded;
+  }
+}
+
+function saveDummyMembers(members: Member[]): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(members));
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * メンバー一覧を取得する。Supabase未設定時はダミーデータ(localStorage保存)を返す。
+ */
+export async function fetchMembers(): Promise<Member[]> {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("members")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as Member[];
+  }
+  return loadDummyMembers();
+}
+
+/**
+ * IDを指定して1件取得する。デジタル名刺(まとめページ)用。
+ */
+export async function fetchMemberById(id: string): Promise<Member | null> {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("members")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as Member | null) ?? null;
+  }
+  const members = loadDummyMembers();
+  return members.find((m) => m.id === id) ?? null;
+}
+
+async function resolvePhotoUrl(
+  file: File | null | undefined,
+  fallback: string,
+  memberId: string,
+  variant: "icon" | "bust"
+): Promise<string> {
+  if (!file) return fallback;
+  if (supabase) return uploadMemberPhoto(file, memberId, variant);
+  return fileToDataUrl(file);
+}
+
+/**
+ * メンバーを新規登録する。Supabase未設定時はダミーデータとしてlocalStorageに保存する。
+ */
+export async function createMember(
+  input: MemberInput,
+  photos: MemberPhotoFiles = {}
+): Promise<Member> {
+  const id = crypto.randomUUID();
+  const fallbackAvatar = sampleAvatarUrl(input.name);
+  const photo_icon_url = await resolvePhotoUrl(photos.iconFile, fallbackAvatar, id, "icon");
+  const photo_bust_url = await resolvePhotoUrl(photos.bustFile, fallbackAvatar, id, "bust");
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("members")
+      .insert({ id, ...input, photo_icon_url, photo_bust_url, sort_order: Date.now() })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Member;
+  }
+
+  const member: Member = {
+    id,
+    ...input,
+    photo_icon_url,
+    photo_bust_url,
+    sort_order: Date.now(),
+    created_at: new Date().toISOString(),
+  };
+
+  const members = loadDummyMembers();
+  members.unshift(member);
+  saveDummyMembers(members);
+  return member;
+}
+
+/**
+ * 既存メンバーを更新する。写真ファイルが渡されない場合は既存のURLを維持する。
+ */
+export async function updateMember(
+  id: string,
+  input: MemberInput,
+  photos: MemberPhotoFiles,
+  existingPhotoUrls: { photo_icon_url: string; photo_bust_url: string }
+): Promise<Member> {
+  const photo_icon_url = await resolvePhotoUrl(
+    photos.iconFile,
+    existingPhotoUrls.photo_icon_url,
+    id,
+    "icon"
+  );
+  const photo_bust_url = await resolvePhotoUrl(
+    photos.bustFile,
+    existingPhotoUrls.photo_bust_url,
+    id,
+    "bust"
+  );
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("members")
+      .update({ ...input, photo_icon_url, photo_bust_url })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Member;
+  }
+
+  const members = loadDummyMembers();
+  const index = members.findIndex((m) => m.id === id);
+  if (index === -1) throw new Error("メンバーが見つかりません");
+
+  const updated: Member = {
+    ...members[index],
+    ...input,
+    photo_icon_url,
+    photo_bust_url,
+  };
+  members[index] = updated;
+  saveDummyMembers(members);
+  return updated;
+}
+
+/**
+ * メンバーを削除する。
+ */
+export async function deleteMember(id: string): Promise<void> {
+  if (supabase) {
+    const { error } = await supabase.from("members").delete().eq("id", id);
+    if (error) throw error;
+    return;
+  }
+
+  const members = loadDummyMembers().filter((m) => m.id !== id);
+  saveDummyMembers(members);
+}
+
+/**
+ * 一覧のドラッグ&ドロップによる手動並び順を保存する。
+ * orderedIds の並び順どおりに sort_order (0始まりの連番) を割り当てる。
+ */
+export async function reorderMembers(orderedIds: string[]): Promise<void> {
+  if (supabase) {
+    const client = supabase;
+    await Promise.all(
+      orderedIds.map((id, index) => client.from("members").update({ sort_order: index }).eq("id", id))
+    );
+    return;
+  }
+
+  const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
+  const members = loadDummyMembers().map((m) =>
+    orderMap.has(m.id) ? { ...m, sort_order: orderMap.get(m.id) as number } : m
+  );
+  saveDummyMembers(members);
+}

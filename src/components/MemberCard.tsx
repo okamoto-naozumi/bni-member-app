@@ -1,0 +1,138 @@
+import Link from "next/link";
+import { Pencil, QrCode, Trash2 } from "lucide-react";
+import type { Member } from "@/lib/members";
+
+export default function MemberCard({
+  member,
+  onEdit,
+  onDelete,
+}: {
+  member: Member;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  return (
+    <div className="flex gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      {/* eslint-disable-next-line @next/next/no-img-element -- photo_icon_url may be a data URL or arbitrary remote host */}
+      <img
+        src={member.photo_icon_url}
+        alt={member.name}
+        className="h-16 w-16 shrink-0 rounded-full object-cover"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h3 className="truncate font-semibold text-zinc-900 dark:text-zinc-50">
+                {member.name}
+              </h3>
+              {member.name_kana && (
+                <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                  {member.name_kana}
+                </span>
+              )}
+            </div>
+            {(member.chapter || member.role) && (
+              <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
+                {[member.chapter, member.role].filter(Boolean).join(" / ")}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                <Pencil size={12} />
+                編集
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+              >
+                <Trash2 size={12} />
+                削除
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {member.category && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+              {member.category}
+            </span>
+          )}
+          {member.team && (
+            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+              {member.team}
+            </span>
+          )}
+          {member.company && (
+            <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+              {member.company}
+            </span>
+          )}
+          {member.show_qr_code && (
+            <Link
+              href={`/m/${member.id}`}
+              target="_blank"
+              className="flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
+            >
+              <QrCode size={11} />
+              QR ON
+            </Link>
+          )}
+        </div>
+
+        {member.wanted_referral && (
+          <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium text-zinc-500 dark:text-zinc-400">
+              欲しいリファーラル:
+            </span>{" "}
+            {member.wanted_referral}
+          </p>
+        )}
+
+        {member.comment && (
+          <p className="mt-2 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+            {member.comment}
+          </p>
+        )}
+
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {member.contact && <span>{member.contact}</span>}
+          {member.email && <span>{member.email}</span>}
+          {member.hp_url && (
+            <a
+              href={member.hp_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate text-sky-600 underline dark:text-sky-400"
+            >
+              {member.hp_url}
+            </a>
+          )}
+        </div>
+
+        {member.custom_fields.length > 0 && (
+          <dl className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+            {member.custom_fields.map((field, i) => (
+              <div key={i} className="flex gap-1">
+                <dt className="font-medium text-zinc-500 dark:text-zinc-400">
+                  {field.key}:
+                </dt>
+                <dd className="text-zinc-700 dark:text-zinc-300">{field.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    </div>
+  );
+}
