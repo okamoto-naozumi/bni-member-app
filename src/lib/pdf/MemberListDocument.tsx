@@ -105,6 +105,16 @@ const styles = StyleSheet.create({
     marginTop: 3,
     color: "#3F3F46",
   },
+  contactRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 2,
+  },
+  contact: {
+    fontSize: 7.5,
+    color: "#52525B",
+    marginRight: 6,
+  },
   description: {
     fontSize: 8,
     marginTop: 2,
@@ -203,6 +213,16 @@ export default function MemberListDocument({
                     ) : null}
                     {member.company ? (
                       <Text style={styles.company}>{member.company}</Text>
+                    ) : null}
+                    {member.contact || member.email ? (
+                      <View style={styles.contactRow}>
+                        {member.contact ? (
+                          <Text style={styles.contact}>{member.contact}</Text>
+                        ) : null}
+                        {member.email ? (
+                          <Text style={styles.contact}>{member.email}</Text>
+                        ) : null}
+                      </View>
                     ) : null}
                     {member.comment ? (
                       <Text style={styles.description}>{member.comment}</Text>
