@@ -1,5 +1,6 @@
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { Board, BoardItem, GroupDef } from "@/lib/groupBoard";
+import { resolvePdfImageSrc } from "@/lib/pdf/imageSrc";
 
 const styles = StyleSheet.create({
   page: {
@@ -114,7 +115,7 @@ function GroupItemCard({ item }: { item: BoardItem }) {
         </View>
       ) : (
         // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf's Image has no alt prop
-        <Image src={item.photoUrl} style={styles.photo} />
+        <Image src={() => resolvePdfImageSrc(item.photoUrl)} style={styles.photo} />
       )}
       <Text style={styles.itemLabel}>{item.label}</Text>
     </View>

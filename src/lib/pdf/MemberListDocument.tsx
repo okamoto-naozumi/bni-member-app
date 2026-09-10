@@ -1,6 +1,7 @@
 import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import type { Member } from "@/lib/members";
 import { getCategoryColor } from "@/lib/categoryColors";
+import { resolvePdfImageSrc } from "@/lib/pdf/imageSrc";
 
 const styles = StyleSheet.create({
   page: {
@@ -193,7 +194,7 @@ export default function MemberListDocument({
               return (
                 <View key={member.id} style={styles.card} wrap={false}>
                   {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf's Image has no alt prop */}
-                  <Image src={photo} style={styles.photo} />
+                  <Image src={() => resolvePdfImageSrc(photo)} style={styles.photo} />
                   <View style={styles.info}>
                     <View style={styles.nameRow}>
                       <Text style={styles.name}>{member.name}</Text>

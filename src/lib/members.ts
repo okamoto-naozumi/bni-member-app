@@ -79,9 +79,11 @@ export function sampleAvatarUrl(name: string): string {
     hash = (hash * 31 + char.charCodeAt(0)) % palette.length;
   }
   const background = palette[Math.abs(hash) % palette.length];
+  // format=png を明示しないとSVGが返り、@react-pdf/renderer(ラスタ画像のみ対応)で
+  // PDF描画が壊れて写真以降の項目が丸ごと表示されなくなる
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(
     name
-  )}&background=${background}&color=ffffff&size=128&bold=true`;
+  )}&background=${background}&color=ffffff&size=128&bold=true&format=png`;
 }
 
 const DUMMY_SEED_MEMBERS: Array<
