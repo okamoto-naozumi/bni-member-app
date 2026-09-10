@@ -31,6 +31,9 @@ const EMPTY_INPUT: MemberInput = {
   category: "",
   team: "",
   wanted_referral: "",
+  gold_referral: "",
+  silver_referral: "",
+  bronze_referral: "",
   comment: "",
   contact: "",
   email: "",
@@ -65,6 +68,9 @@ export default function MemberForm({
           category: initial.category,
           team: initial.team,
           wanted_referral: initial.wanted_referral,
+          gold_referral: initial.gold_referral,
+          silver_referral: initial.silver_referral,
+          bronze_referral: initial.bronze_referral,
           comment: initial.comment,
           contact: initial.contact,
           email: initial.email,
@@ -349,6 +355,33 @@ export default function MemberForm({
             placeholder="紹介してほしいお客様像を入力してください"
           />
         </Field>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Field label="金のリファーラル">
+            <textarea
+              value={input.gold_referral}
+              onChange={(e) => setInput({ ...input, gold_referral: e.target.value })}
+              className="input min-h-16 resize-y"
+              placeholder="最も紹介してほしいお客様像"
+            />
+          </Field>
+          <Field label="銀のリファーラル">
+            <textarea
+              value={input.silver_referral}
+              onChange={(e) => setInput({ ...input, silver_referral: e.target.value })}
+              className="input min-h-16 resize-y"
+              placeholder="次に紹介してほしいお客様像"
+            />
+          </Field>
+          <Field label="銅のリファーラル">
+            <textarea
+              value={input.bronze_referral}
+              onChange={(e) => setInput({ ...input, bronze_referral: e.target.value })}
+              className="input min-h-16 resize-y"
+              placeholder="その他紹介してほしいお客様像"
+            />
+          </Field>
+        </div>
 
         <Field label="コメント">
           <textarea

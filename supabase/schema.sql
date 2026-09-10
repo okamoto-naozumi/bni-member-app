@@ -31,6 +31,9 @@ alter table public.members add column if not exists instagram_url text;
 alter table public.members add column if not exists facebook_url text;
 alter table public.members add column if not exists show_qr_code boolean not null default false;
 alter table public.members add column if not exists created_at timestamptz not null default now();
+alter table public.members add column if not exists gold_referral text;
+alter table public.members add column if not exists silver_referral text;
+alter table public.members add column if not exists bronze_referral text;
 
 alter table public.members enable row level security;
 

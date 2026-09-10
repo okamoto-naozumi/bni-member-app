@@ -14,6 +14,7 @@ import { deleteMember, fetchMembers, reorderMembers, type Member } from "@/lib/m
 import MemberCard from "@/components/MemberCard";
 import SortableMemberCard from "@/components/SortableMemberCard";
 import MemberForm from "@/components/MemberForm";
+import MemberDetailModal from "@/components/MemberDetailModal";
 
 type Tab = "list" | "edit";
 type SortKey = "kana" | "team" | "created" | "manual";
@@ -57,6 +58,7 @@ export default function MembersPage() {
   const [tab, setTab] = useState<Tab>("list");
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created");
+  const [detailMember, setDetailMember] = useState<Member | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -210,6 +212,7 @@ export default function MembersPage() {
                       <SortableMemberCard
                         key={m.id}
                         member={m}
+                        onDetail={() => setDetailMember(m)}
                         onEdit={() => startEdit(m)}
                         onDelete={() => handleDelete(m)}
                       />
@@ -223,6 +226,7 @@ export default function MembersPage() {
                   <MemberCard
                     key={m.id}
                     member={m}
+                    onDetail={() => setDetailMember(m)}
                     onEdit={() => startEdit(m)}
                     onDelete={() => handleDelete(m)}
                   />
@@ -244,6 +248,10 @@ export default function MembersPage() {
           </div>
         )}
       </div>
+
+      {detailMember && (
+        <MemberDetailModal member={detailMember} onClose={() => setDetailMember(null)} />
+      )}
     </div>
   );
 }

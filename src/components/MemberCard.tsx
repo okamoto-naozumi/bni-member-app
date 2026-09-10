@@ -1,24 +1,38 @@
 import Link from "next/link";
-import { Pencil, QrCode, Trash2 } from "lucide-react";
+import { Info, Pencil, QrCode, Trash2 } from "lucide-react";
 import type { Member } from "@/lib/members";
 
 export default function MemberCard({
   member,
+  onDetail,
   onEdit,
   onDelete,
 }: {
   member: Member;
+  onDetail?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
   return (
     <div className="flex gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      {/* eslint-disable-next-line @next/next/no-img-element -- photo_icon_url may be a data URL or arbitrary remote host */}
-      <img
-        src={member.photo_icon_url}
-        alt={member.name}
-        className="h-16 w-16 shrink-0 rounded-full object-cover"
-      />
+      <div className="flex shrink-0 flex-col items-center gap-1.5">
+        {/* eslint-disable-next-line @next/next/no-img-element -- photo_icon_url may be a data URL or arbitrary remote host */}
+        <img
+          src={member.photo_icon_url}
+          alt={member.name}
+          className="h-16 w-16 rounded-full object-cover"
+        />
+        {member.show_qr_code && (
+          <Link
+            href={`/m/${member.id}`}
+            target="_blank"
+            className="flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
+          >
+            <QrCode size={11} />
+            QR ON
+          </Link>
+        )}
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -39,6 +53,16 @@ export default function MemberCard({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            {onDetail && (
+              <button
+                type="button"
+                onClick={onDetail}
+                className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                <Info size={12} />
+                詳細
+              </button>
+            )}
             {onEdit && (
               <button
                 type="button"
@@ -77,16 +101,6 @@ export default function MemberCard({
             <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
               {member.company}
             </span>
-          )}
-          {member.show_qr_code && (
-            <Link
-              href={`/m/${member.id}`}
-              target="_blank"
-              className="flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
-            >
-              <QrCode size={11} />
-              QR ON
-            </Link>
           )}
         </div>
 

@@ -17,6 +17,12 @@ export interface Member {
   category: string;
   team: string;
   wanted_referral: string;
+  /** 金のリファーラル(最も重要なリファーラル) */
+  gold_referral: string;
+  /** 銀のリファーラル */
+  silver_referral: string;
+  /** 銅のリファーラル */
+  bronze_referral: string;
   comment: string;
   contact: string;
   email: string;
@@ -47,6 +53,9 @@ export interface MemberInput {
   category: string;
   team: string;
   wanted_referral: string;
+  gold_referral: string;
+  silver_referral: string;
+  bronze_referral: string;
   comment: string;
   contact: string;
   email: string;
@@ -99,6 +108,9 @@ const DUMMY_SEED_MEMBERS: Array<
     company: "佐藤税務会計事務所",
     team: "ビジター委員会",
     wanted_referral: "顧問契約を検討している中小企業の経営者",
+    gold_referral: "相続税申告を控えている資産家",
+    silver_referral: "法人成りを検討している個人事業主",
+    bronze_referral: "記帳代行を依頼したい小規模事業者",
     comment: "中小企業の税務顧問・相続対策を専門としています。",
     contact: "03-1234-5601",
     email: "satoh@example.com",
@@ -122,6 +134,9 @@ const DUMMY_SEED_MEMBERS: Array<
     company: "鈴木社会保険労務士事務所",
     team: "エデュケーション委員会",
     wanted_referral: "就業規則の見直しを検討している企業",
+    gold_referral: "助成金の申請を検討している企業",
+    silver_referral: "採用強化を進めている企業",
+    bronze_referral: "労務相談窓口を探している企業",
     comment: "労務相談・就業規則の整備を支援します。",
     contact: "03-1234-5602",
     email: "suzuki@example.com",
@@ -145,6 +160,9 @@ const DUMMY_SEED_MEMBERS: Array<
     company: "高橋システムズ株式会社",
     team: "PR委員会",
     wanted_referral: "業務システムの刷新を検討している企業",
+    gold_referral: "基幹システムの刷新を検討している企業",
+    silver_referral: "業務効率化ツールを探している企業",
+    bronze_referral: "ホームページ制作を検討している事業者",
     comment: "業務システムの受託開発、DX支援を行っています。",
     contact: "03-1234-5603",
     email: "takahashi@example.com",
@@ -168,6 +186,9 @@ const DUMMY_SEED_MEMBERS: Array<
     company: "スタジオTANAKA",
     team: "メンバーシップ委員会",
     wanted_referral: "ブランディングを見直したい企業経営者",
+    gold_referral: "ブランディングを刷新したい企業経営者",
+    silver_referral: "ロゴ・名刺デザインを依頼したい事業者",
+    bronze_referral: "SNS運用を強化したい事業者",
     comment: "コーポレートサイト・ブランディングデザインを手がけています。",
     contact: "03-1234-5604",
     email: "tanaka@example.com",
@@ -191,6 +212,9 @@ const DUMMY_SEED_MEMBERS: Array<
     company: "伊藤保険サービス",
     team: "ビジター委員会",
     wanted_referral: "法人保険の見直しを検討している経営者",
+    gold_referral: "事業承継に伴う法人保険を検討している経営者",
+    silver_referral: "福利厚生を充実させたい企業",
+    bronze_referral: "個人の生命保険を見直したい方",
     comment: "法人向け損害保険・生命保険のコンサルティング。",
     contact: "03-1234-5605",
     email: "ito@example.com",
@@ -214,6 +238,9 @@ const DUMMY_SEED_MEMBERS: Array<
     company: "渡辺不動産株式会社",
     team: "エデュケーション委員会",
     wanted_referral: "事業用物件を探している法人・個人事業主",
+    gold_referral: "事業用物件の売買を検討している法人",
+    silver_referral: "オフィス移転を検討している企業",
+    bronze_referral: "資産活用の相談をしたい個人オーナー",
     comment: "事業用物件の仲介・資産活用のご相談を承ります。",
     contact: "03-1234-5606",
     email: "watanabe@example.com",
@@ -241,6 +268,19 @@ function buildSeedMembers(): Member[] {
   });
 }
 
+/**
+ * 過去バージョンで保存されたデータ(gold/silver/bronze_referral未対応)や、
+ * DBのnull値を安全に補完する。既存データとの互換性維持のためのフォールバック。
+ */
+function normalizeMember(member: Member): Member {
+  return {
+    ...member,
+    gold_referral: member.gold_referral ?? "",
+    silver_referral: member.silver_referral ?? "",
+    bronze_referral: member.bronze_referral ?? "",
+  };
+}
+
 function loadDummyMembers(): Member[] {
   if (typeof window === "undefined") {
     return buildSeedMembers();
@@ -252,7 +292,7 @@ function loadDummyMembers(): Member[] {
     return seeded;
   }
   try {
-    return JSON.parse(raw) as Member[];
+    return (JSON.parse(raw) as Member[]).map(normalizeMember);
   } catch {
     const seeded = buildSeedMembers();
     window.localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(seeded));
@@ -284,7 +324,7 @@ export async function fetchMembers(): Promise<Member[]> {
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return (data ?? []) as Member[];
+    return ((data ?? []) as Member[]).map(normalizeMember);
   }
   return loadDummyMembers();
 }
@@ -300,7 +340,7 @@ export async function fetchMemberById(id: string): Promise<Member | null> {
       .eq("id", id)
       .maybeSingle();
     if (error) throw error;
-    return (data as Member | null) ?? null;
+    return data ? normalizeMember(data as Member) : null;
   }
   const members = loadDummyMembers();
   return members.find((m) => m.id === id) ?? null;

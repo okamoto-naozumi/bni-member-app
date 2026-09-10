@@ -8,10 +8,12 @@ import MemberCard from "@/components/MemberCard";
 
 export default function SortableMemberCard({
   member,
+  onDetail,
   onEdit,
   onDelete,
 }: {
   member: Member;
+  onDetail: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -39,7 +41,7 @@ export default function SortableMemberCard({
       >
         <GripVertical size={12} />
       </button>
-      <MemberCard member={member} onEdit={onEdit} onDelete={onDelete} />
+      <MemberCard member={member} onDetail={onDetail} onEdit={onEdit} onDelete={onDelete} />
     </div>
   );
 }
