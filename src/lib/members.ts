@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { uploadMemberPhoto } from "@/lib/memberPhotos";
 import { uploadMemberAttachment } from "@/lib/memberAttachments";
 import { fileToDataUrl } from "@/lib/fileToDataUrl";
+import { extractMissingColumn } from "@/lib/postgrestError";
 
 export interface CustomField {
   key: string;
@@ -386,28 +387,6 @@ async function resolveAttachment(
   }
   if (removeAttachment) return { attachment_url: "", attachment_name: "" };
   return fallback;
-}
-
-/**
- * PostgrestErrorのメッセージから「存在しない列」の列名を抽出する。
- * gold_referral 等の新規カラムがまだ本番DBに追加されていない場合でも、
- * その列だけを除いて再送信できるようにするためのフォールバック。
- */
-function extractMissingColumn(error: unknown): string | null {
-  const message =
-    error && typeof error === "object" && "message" in error
-      ? String((error as { message?: unknown }).message ?? "")
-      : "";
-  const patterns = [
-    /Could not find the '([a-zA-Z0-9_]+)' column/i,
-    /column "?([a-zA-Z0-9_]+)"? of relation "?members"? does not exist/i,
-    /column members\.([a-zA-Z0-9_]+) does not exist/i,
-  ];
-  for (const pattern of patterns) {
-    const match = message.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
 }
 
 /**

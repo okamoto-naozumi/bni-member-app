@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { uploadPresentationMaterial } from "@/lib/presentationMaterials";
 import { fileToDataUrl } from "@/lib/fileToDataUrl";
+import { extractMissingColumn } from "@/lib/postgrestError";
 
 export interface Presentation {
   id: string;
@@ -100,14 +101,69 @@ function normalizePresentation(p: Presentation): Presentation {
   };
 }
 
+/**
+ * presentations テーブルの実施日カラム名の候補。
+ * 本番DBが `presentation_date` ではなく `present_date` で作成されている場合にも
+ * エラーにならず動作するよう、両方を試すフォールバックに使う。
+ */
+const DATE_COLUMNS = ["presentation_date", "present_date"] as const;
+type DateColumn = (typeof DATE_COLUMNS)[number];
+
+/** 一度成功したカラム名をセッション内でキャッシュし、以降は最初にそれを試す。 */
+let cachedDateColumn: DateColumn | null = null;
+
+function rowToPresentation(row: Record<string, unknown>, dateColumn: DateColumn): Presentation {
+  return normalizePresentation({
+    id: String(row.id),
+    presentation_date: String(row[dateColumn] ?? ""),
+    member_id: (row.member_id as string | null) ?? null,
+    theme: (row.theme as string) ?? "",
+    material_url: (row.material_url as string) ?? "",
+    material_name: (row.material_name as string) ?? "",
+    created_at: (row.created_at as string) ?? "",
+  });
+}
+
+/**
+ * `run` を日付カラム名候補(presentation_date → present_date)の順に試し、
+ * 「そのカラムが存在しない」エラーが返ってきた場合だけ次の候補にフォールバックする。
+ */
+async function withDateColumnFallback<T>(
+  run: (column: DateColumn) => PromiseLike<{ data: T | null; error: unknown }>
+): Promise<{ data: T; column: DateColumn }> {
+  const ordered: DateColumn[] = cachedDateColumn
+    ? [cachedDateColumn, ...DATE_COLUMNS.filter((c) => c !== cachedDateColumn)]
+    : [...DATE_COLUMNS];
+
+  let lastError: unknown = null;
+  for (const column of ordered) {
+    const { data, error } = await run(column);
+    if (!error) {
+      cachedDateColumn = column;
+      return { data: data as T, column };
+    }
+    const missing = extractMissingColumn(error);
+    if (missing && (DATE_COLUMNS as readonly string[]).includes(missing)) {
+      lastError = error;
+      continue;
+    }
+    throw error;
+  }
+  throw (
+    lastError ??
+    new Error(
+      "presentations テーブルの日付カラム(presentation_date / present_date)が見つかりません。"
+    )
+  );
+}
+
 export async function fetchPresentations(): Promise<Presentation[]> {
   if (supabase) {
-    const { data, error } = await supabase
-      .from("presentations")
-      .select("*")
-      .order("presentation_date", { ascending: true });
-    if (error) throw error;
-    return ((data ?? []) as Presentation[]).map(normalizePresentation);
+    const client = supabase;
+    const { data, column } = await withDateColumnFallback<Record<string, unknown>[]>((col) =>
+      client.from("presentations").select("*").order(col, { ascending: true })
+    );
+    return (data ?? []).map((row) => rowToPresentation(row, column));
   }
   return loadDummyPresentations().sort((a, b) =>
     a.presentation_date.localeCompare(b.presentation_date)
@@ -143,13 +199,16 @@ export async function createPresentation(
   );
 
   if (supabase) {
-    const { data, error } = await supabase
-      .from("presentations")
-      .insert({ id, ...input, material_url, material_name })
-      .select()
-      .single();
-    if (error) throw error;
-    return normalizePresentation(data as Presentation);
+    const client = supabase;
+    const { member_id, theme } = input;
+    const { data, column } = await withDateColumnFallback<Record<string, unknown>>((col) =>
+      client
+        .from("presentations")
+        .insert({ id, member_id, theme, material_url, material_name, [col]: input.presentation_date })
+        .select()
+        .single()
+    );
+    return rowToPresentation(data, column);
   }
 
   const presentation: Presentation = {
@@ -179,14 +238,17 @@ export async function updatePresentation(
   );
 
   if (supabase) {
-    const { data, error } = await supabase
-      .from("presentations")
-      .update({ ...input, material_url, material_name })
-      .eq("id", id)
-      .select()
-      .single();
-    if (error) throw error;
-    return normalizePresentation(data as Presentation);
+    const client = supabase;
+    const { member_id, theme } = input;
+    const { data, column } = await withDateColumnFallback<Record<string, unknown>>((col) =>
+      client
+        .from("presentations")
+        .update({ member_id, theme, material_url, material_name, [col]: input.presentation_date })
+        .eq("id", id)
+        .select()
+        .single()
+    );
+    return rowToPresentation(data, column);
   }
 
   const presentations = loadDummyPresentations();

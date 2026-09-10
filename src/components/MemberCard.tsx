@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { Info, Pencil, QrCode, Trash2 } from "lucide-react";
+import { Info, Pencil, Trash2 } from "lucide-react";
 import type { Member } from "@/lib/members";
 
 export default function MemberCard({
   member,
+  qrCodeUrl,
   onDetail,
   onEdit,
   onDelete,
 }: {
   member: Member;
+  /** メンバーの名刺ページ(/m/[id])へ遷移するQRコードのdata URL。show_qr_codeがtrueの間だけ表示に使用する。 */
+  qrCodeUrl?: string | null;
   onDetail?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -26,10 +29,19 @@ export default function MemberCard({
           <Link
             href={`/m/${member.id}`}
             target="_blank"
-            className="flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
+            title="このQRコードをスキャンするとデジタル名刺が開きます"
+            className="block"
           >
-            <QrCode size={11} />
-            QR ON
+            {qrCodeUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element -- QR code is a generated data URL */
+              <img
+                src={qrCodeUrl}
+                alt={`${member.name}のデジタル名刺QRコード`}
+                className="h-20 w-20 rounded-md border border-zinc-200 bg-white p-1 dark:border-zinc-800"
+              />
+            ) : (
+              <div className="h-20 w-20 animate-pulse rounded-md bg-zinc-100 dark:bg-zinc-900" />
+            )}
           </Link>
         )}
       </div>

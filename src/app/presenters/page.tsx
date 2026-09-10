@@ -44,13 +44,23 @@ export default function PresentersPage() {
   });
 
   useEffect(() => {
-    Promise.all([fetchMembers(), fetchPresentations()])
-      .then(([ms, ps]) => {
-        setMembers(ms);
-        setPresentations(ps);
-      })
-      .catch((err) => setLoadError(getErrorMessage(err)))
-      .finally(() => setLoading(false));
+    // メンバー取得とプレゼン予定取得は独立して行う。
+    // 片方が失敗しても、もう片方の結果(特に担当メンバーの選択肢)は失われないようにする。
+    Promise.allSettled([fetchMembers(), fetchPresentations()]).then(
+      ([membersResult, presentationsResult]) => {
+        if (membersResult.status === "fulfilled") {
+          setMembers(membersResult.value);
+        } else {
+          setLoadError(getErrorMessage(membersResult.reason));
+        }
+        if (presentationsResult.status === "fulfilled") {
+          setPresentations(presentationsResult.value);
+        } else {
+          setLoadError((prev) => prev ?? getErrorMessage(presentationsResult.reason));
+        }
+        setLoading(false);
+      }
+    );
   }, []);
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
@@ -173,10 +183,12 @@ export default function PresentersPage() {
         </button>
       </div>
 
+      {loadError && (
+        <p className="mt-4 text-sm text-red-600 dark:text-red-400">{loadError}</p>
+      )}
+
       {loading ? (
         <p className="mt-4 text-sm text-zinc-500">読み込み中...</p>
-      ) : loadError ? (
-        <p className="mt-4 text-sm text-red-600 dark:text-red-400">{loadError}</p>
       ) : view === "list" ? (
         <div className="mt-4 flex flex-col gap-6">
           <PresentationSection

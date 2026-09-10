@@ -8,11 +8,13 @@ import MemberCard from "@/components/MemberCard";
 
 export default function SortableMemberCard({
   member,
+  qrCodeUrl,
   onDetail,
   onEdit,
   onDelete,
 }: {
   member: Member;
+  qrCodeUrl?: string | null;
   onDetail: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -41,7 +43,13 @@ export default function SortableMemberCard({
       >
         <GripVertical size={12} />
       </button>
-      <MemberCard member={member} onDetail={onDetail} onEdit={onEdit} onDelete={onDelete} />
+      <MemberCard
+        member={member}
+        qrCodeUrl={qrCodeUrl}
+        onDetail={onDetail}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
     </div>
   );
 }

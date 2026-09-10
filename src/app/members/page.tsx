@@ -12,6 +12,7 @@ import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortab
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { deleteMember, fetchMembers, reorderMembers, type Member } from "@/lib/members";
 import { getErrorMessage } from "@/lib/errorMessage";
+import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
 import MemberCard from "@/components/MemberCard";
 import SortableMemberCard from "@/components/SortableMemberCard";
 import MemberForm from "@/components/MemberForm";
@@ -61,6 +62,7 @@ export default function MembersPage() {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created");
   const [detailMember, setDetailMember] = useState<Member | null>(null);
+  const [qrCodeMap, setQrCodeMap] = useState<Record<string, string>>({});
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -72,6 +74,21 @@ export default function MembersPage() {
       .catch((err) => setLoadError(getErrorMessage(err)))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const targets = members.filter((m) => m.show_qr_code);
+    if (targets.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      targets.map(async (m) => [m.id, await generateQrDataUrl(memberProfileUrl(m.id))] as const)
+    ).then((entries) => {
+      if (cancelled) return;
+      setQrCodeMap((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [members]);
 
   const sortedMembers = useMemo(() => sortMembers(members, sortKey), [members, sortKey]);
 
@@ -218,6 +235,7 @@ export default function MembersPage() {
                       <SortableMemberCard
                         key={m.id}
                         member={m}
+                        qrCodeUrl={qrCodeMap[m.id]}
                         onDetail={() => setDetailMember(m)}
                         onEdit={() => startEdit(m)}
                         onDelete={() => handleDelete(m)}
@@ -232,6 +250,7 @@ export default function MembersPage() {
                   <MemberCard
                     key={m.id}
                     member={m}
+                    qrCodeUrl={qrCodeMap[m.id]}
                     onDetail={() => setDetailMember(m)}
                     onEdit={() => startEdit(m)}
                     onDelete={() => handleDelete(m)}
