@@ -11,6 +11,7 @@ import {
 import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { deleteMember, fetchMembers, reorderMembers, type Member } from "@/lib/members";
+import { getErrorMessage } from "@/lib/errorMessage";
 import MemberCard from "@/components/MemberCard";
 import SortableMemberCard from "@/components/SortableMemberCard";
 import MemberForm from "@/components/MemberForm";
@@ -67,7 +68,7 @@ export default function MembersPage() {
   useEffect(() => {
     fetchMembers()
       .then(setMembers)
-      .catch((err) => setLoadError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setLoadError(getErrorMessage(err)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -88,7 +89,7 @@ export default function MembersPage() {
       await deleteMember(member.id);
       setMembers((prev) => prev.filter((m) => m.id !== member.id));
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      setLoadError(getErrorMessage(err));
     }
   }
 
@@ -111,7 +112,7 @@ export default function MembersPage() {
     try {
       await reorderMembers(orderedIds);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      setLoadError(getErrorMessage(err));
     }
   }
 

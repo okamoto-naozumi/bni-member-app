@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Pencil, Plus, Trash2, X, Check } from "lucide-react";
 import { createTeam, deleteTeam, fetchTeams, updateTeam, type Team } from "@/lib/teams";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 export default function TeamsSettingsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -16,7 +17,7 @@ export default function TeamsSettingsPage() {
   useEffect(() => {
     fetchTeams()
       .then(setTeams)
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -30,7 +31,7 @@ export default function TeamsSettingsPage() {
       setTeams((prev) => [...prev, team].sort((a, b) => a.name.localeCompare(b.name, "ja")));
       setNewName("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getErrorMessage(err));
     }
   }
 
@@ -48,7 +49,7 @@ export default function TeamsSettingsPage() {
       setTeams((prev) => prev.map((t) => (t.id === id ? updated : t)));
       setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getErrorMessage(err));
     }
   }
 
@@ -59,7 +60,7 @@ export default function TeamsSettingsPage() {
       await deleteTeam(team.id);
       setTeams((prev) => prev.filter((t) => t.id !== team.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getErrorMessage(err));
     }
   }
 

@@ -34,6 +34,8 @@ alter table public.members add column if not exists created_at timestamptz not n
 alter table public.members add column if not exists gold_referral text;
 alter table public.members add column if not exists silver_referral text;
 alter table public.members add column if not exists bronze_referral text;
+alter table public.members add column if not exists attachment_url text;
+alter table public.members add column if not exists attachment_name text;
 
 alter table public.members enable row level security;
 
@@ -120,3 +122,31 @@ create policy "Authenticated users can delete member photos"
   on storage.objects for delete
   to authenticated
   using (bucket_id = 'member-photos');
+
+-- Storage bucket for member business documents (PDF等の添付資料)
+insert into storage.buckets (id, name, public)
+values ('member-attachments', 'member-attachments', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Member attachments are publicly readable" on storage.objects;
+create policy "Member attachments are publicly readable"
+  on storage.objects for select
+  using (bucket_id = 'member-attachments');
+
+drop policy if exists "Authenticated users can upload member attachments" on storage.objects;
+create policy "Authenticated users can upload member attachments"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'member-attachments');
+
+drop policy if exists "Authenticated users can update member attachments" on storage.objects;
+create policy "Authenticated users can update member attachments"
+  on storage.objects for update
+  to authenticated
+  using (bucket_id = 'member-attachments');
+
+drop policy if exists "Authenticated users can delete member attachments" on storage.objects;
+create policy "Authenticated users can delete member attachments"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'member-attachments');

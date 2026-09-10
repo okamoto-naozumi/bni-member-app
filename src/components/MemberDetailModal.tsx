@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Mail, Phone, Globe, Award } from "lucide-react";
+import { X, Mail, Phone, Globe, Award, FileText } from "lucide-react";
 import type { Member } from "@/lib/members";
 
 export default function MemberDetailModal({
@@ -139,6 +139,26 @@ export default function MemberDetailModal({
             <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
               {member.comment}
             </p>
+          </div>
+        )}
+
+        {member.attachment_url && (
+          <div className="mt-4">
+            <p className="mb-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              資料・添付ファイル
+            </p>
+            <a
+              href={member.attachment_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-full bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
+            >
+              <FileText size={16} />
+              添付資料を開く
+              {member.attachment_name && (
+                <span className="truncate text-xs opacity-70">({member.attachment_name})</span>
+              )}
+            </a>
           </div>
         )}
 

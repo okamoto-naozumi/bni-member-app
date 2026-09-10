@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Plus, Settings, X } from "lucide-react";
+import { FileText, Paperclip, Plus, Settings, X } from "lucide-react";
 import {
   createMember,
   updateMember,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/members";
 import { MEMBER_CATEGORIES } from "@/lib/categories";
 import { fetchTeams, type Team } from "@/lib/teams";
+import { getErrorMessage } from "@/lib/errorMessage";
 import PhotoCropModal from "@/components/PhotoCropModal";
 
 const ROLE_SUGGESTIONS = [
@@ -95,10 +96,14 @@ export default function MemberForm({
   );
   const [cropTarget, setCropTarget] = useState<CropTarget>(null);
   const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentUrl, setAttachmentUrl] = useState<string>(initial?.attachment_url || "");
+  const [attachmentName, setAttachmentName] = useState<string>(initial?.attachment_name || "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
   const bustInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchTeams().then(setTeams);
@@ -143,6 +148,19 @@ export default function MemberForm({
     if (bustInputRef.current) bustInputRef.current.value = "";
   }
 
+  function handleAttachmentSelect(file: File | null) {
+    if (!file) return;
+    setAttachmentFile(file);
+    setAttachmentName(file.name);
+  }
+
+  function removeAttachment() {
+    setAttachmentFile(null);
+    setAttachmentUrl("");
+    setAttachmentName("");
+    if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+  }
+
   function addCustomField() {
     setInput((prev) => ({
       ...prev,
@@ -180,17 +198,22 @@ export default function MemberForm({
         ),
       };
 
+      const shouldRemoveAttachment =
+        !attachmentFile && !attachmentUrl && Boolean(initial?.attachment_url);
+
       const member = initial
         ? await updateMember(
             initial.id,
             payload,
-            { iconFile, bustFile },
+            { iconFile, bustFile, attachmentFile, removeAttachment: shouldRemoveAttachment },
             {
               photo_icon_url: initial.photo_icon_url,
               photo_bust_url: initial.photo_bust_url,
+              attachment_url: initial.attachment_url,
+              attachment_name: initial.attachment_name,
             }
           )
-        : await createMember(payload, { iconFile, bustFile });
+        : await createMember(payload, { iconFile, bustFile, attachmentFile });
 
       onSaved(member);
       if (!initial) {
@@ -199,9 +222,13 @@ export default function MemberForm({
         setIconPreview(null);
         setBustFile(null);
         setBustPreview(null);
+        setAttachmentFile(null);
+        setAttachmentUrl("");
+        setAttachmentName("");
+        if (attachmentInputRef.current) attachmentInputRef.current.value = "";
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -391,6 +418,57 @@ export default function MemberForm({
             placeholder="事業内容やひとことコメントを入力してください"
           />
         </Field>
+
+        <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <span className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            資料・添付ファイル(PDF等)
+          </span>
+          {attachmentUrl && !attachmentFile ? (
+            <div className="flex items-center gap-2 text-sm">
+              <FileText size={16} className="shrink-0 text-zinc-400" />
+              <a
+                href={attachmentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate text-sky-600 underline dark:text-sky-400"
+              >
+                {attachmentName || "登録済みの資料を開く"}
+              </a>
+              <button
+                type="button"
+                onClick={removeAttachment}
+                className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+                aria-label="添付ファイルを削除"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm">
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*,application/pdf"
+                onChange={(e) => handleAttachmentSelect(e.target.files?.[0] ?? null)}
+                className="block w-full text-xs text-zinc-500 file:mr-2 file:rounded-full file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white dark:file:bg-zinc-100 dark:file:text-black"
+              />
+              {attachmentFile && (
+                <button
+                  type="button"
+                  onClick={removeAttachment}
+                  className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+                  aria-label="選択したファイルを取り消す"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          )}
+          <p className="mt-2 flex items-center gap-1 text-xs text-zinc-500">
+            <Paperclip size={12} />
+            会社案内やサービス資料などのPDFファイル等をアップロードできます。
+          </p>
+        </div>
 
         <div>
           <div className="mb-2 flex items-center justify-between">

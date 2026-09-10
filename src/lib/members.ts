@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { uploadMemberPhoto } from "@/lib/memberPhotos";
+import { uploadMemberAttachment } from "@/lib/memberAttachments";
 
 export interface CustomField {
   key: string;
@@ -41,6 +42,10 @@ export interface Member {
   facebook_url: string;
   /** ONの場合のみ、まとめページ(/m/[id])へのQRコードを表示する。デフォルトはOFF。 */
   show_qr_code: boolean;
+  /** 添付資料(PDF等)の公開URL */
+  attachment_url: string;
+  /** 添付資料の元のファイル名(表示用) */
+  attachment_name: string;
   created_at: string;
 }
 
@@ -71,6 +76,10 @@ export interface MemberInput {
 export interface MemberPhotoFiles {
   iconFile?: File | null;
   bustFile?: File | null;
+  /** 資料・添付ファイル(PDF等) */
+  attachmentFile?: File | null;
+  /** trueの場合、新しいファイルの指定がなくても既存の添付資料を削除する */
+  removeAttachment?: boolean;
 }
 
 // v5: フィールド構成変更(QRコード表示用リンク・表示切り替えを追加)に伴いキーを変更し、
@@ -121,6 +130,8 @@ const DUMMY_SEED_MEMBERS: Array<
     instagram_url: "https://instagram.com/example_satoh",
     facebook_url: "",
     show_qr_code: true,
+    attachment_url: "",
+    attachment_name: "",
     created_at: "2026-01-10T09:00:00.000Z",
     photoName: "佐藤 太郎",
   },
@@ -147,6 +158,8 @@ const DUMMY_SEED_MEMBERS: Array<
     instagram_url: "",
     facebook_url: "",
     show_qr_code: false,
+    attachment_url: "",
+    attachment_name: "",
     created_at: "2026-01-12T09:00:00.000Z",
     photoName: "鈴木 花子",
   },
@@ -173,6 +186,8 @@ const DUMMY_SEED_MEMBERS: Array<
     instagram_url: "",
     facebook_url: "https://facebook.com/example.takahashi",
     show_qr_code: true,
+    attachment_url: "",
+    attachment_name: "",
     created_at: "2026-01-15T09:00:00.000Z",
     photoName: "高橋 健一",
   },
@@ -199,6 +214,8 @@ const DUMMY_SEED_MEMBERS: Array<
     instagram_url: "https://instagram.com/example_tanaka",
     facebook_url: "",
     show_qr_code: false,
+    attachment_url: "",
+    attachment_name: "",
     created_at: "2026-01-18T09:00:00.000Z",
     photoName: "田中 美咲",
   },
@@ -225,6 +242,8 @@ const DUMMY_SEED_MEMBERS: Array<
     instagram_url: "",
     facebook_url: "",
     show_qr_code: false,
+    attachment_url: "",
+    attachment_name: "",
     created_at: "2026-01-20T09:00:00.000Z",
     photoName: "伊藤 大輔",
   },
@@ -251,6 +270,8 @@ const DUMMY_SEED_MEMBERS: Array<
     instagram_url: "",
     facebook_url: "",
     show_qr_code: false,
+    attachment_url: "",
+    attachment_name: "",
     created_at: "2026-01-22T09:00:00.000Z",
     photoName: "渡辺 由美",
   },
@@ -278,6 +299,8 @@ function normalizeMember(member: Member): Member {
     gold_referral: member.gold_referral ?? "",
     silver_referral: member.silver_referral ?? "",
     bronze_referral: member.bronze_referral ?? "",
+    attachment_url: member.attachment_url ?? "",
+    attachment_name: member.attachment_name ?? "",
   };
 }
 
@@ -357,6 +380,102 @@ async function resolvePhotoUrl(
   return fileToDataUrl(file);
 }
 
+async function resolveAttachment(
+  file: File | null | undefined,
+  removeAttachment: boolean | undefined,
+  fallback: { attachment_url: string; attachment_name: string },
+  memberId: string
+): Promise<{ attachment_url: string; attachment_name: string }> {
+  if (file) {
+    const attachment_url = supabase
+      ? await uploadMemberAttachment(file, memberId)
+      : await fileToDataUrl(file);
+    return { attachment_url, attachment_name: file.name };
+  }
+  if (removeAttachment) return { attachment_url: "", attachment_name: "" };
+  return fallback;
+}
+
+/**
+ * PostgrestErrorのメッセージから「存在しない列」の列名を抽出する。
+ * gold_referral 等の新規カラムがまだ本番DBに追加されていない場合でも、
+ * その列だけを除いて再送信できるようにするためのフォールバック。
+ */
+function extractMissingColumn(error: unknown): string | null {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  const patterns = [
+    /Could not find the '([a-zA-Z0-9_]+)' column/i,
+    /column "?([a-zA-Z0-9_]+)"? of relation "?members"? does not exist/i,
+    /column members\.([a-zA-Z0-9_]+) does not exist/i,
+  ];
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/**
+ * insert/update を実行し、DBにまだ存在しない列が原因でエラーになった場合は
+ * その列を除いて自動的に再試行する。既存環境(未マイグレーション)との互換性を保つための処置。
+ */
+async function insertMemberSafely(
+  payload: Record<string, unknown>
+): Promise<Member> {
+  const client = supabase;
+  if (!client) throw new Error("Supabase is not configured");
+
+  let attempt = payload;
+  for (let i = 0; i < 10; i++) {
+    const { data, error } = await client.from("members").insert(attempt).select().single();
+    if (!error) return data as Member;
+
+    const missingColumn = extractMissingColumn(error);
+    if (missingColumn && missingColumn in attempt) {
+      const { [missingColumn]: _omit, ...rest } = attempt;
+      attempt = rest;
+      continue;
+    }
+    throw error;
+  }
+  throw new Error(
+    "メンバーの登録に失敗しました。データベースのスキーマが最新ではない可能性があります。"
+  );
+}
+
+async function updateMemberSafely(
+  id: string,
+  payload: Record<string, unknown>
+): Promise<Member> {
+  const client = supabase;
+  if (!client) throw new Error("Supabase is not configured");
+
+  let attempt = payload;
+  for (let i = 0; i < 10; i++) {
+    const { data, error } = await client
+      .from("members")
+      .update(attempt)
+      .eq("id", id)
+      .select()
+      .single();
+    if (!error) return data as Member;
+
+    const missingColumn = extractMissingColumn(error);
+    if (missingColumn && missingColumn in attempt) {
+      const { [missingColumn]: _omit, ...rest } = attempt;
+      attempt = rest;
+      continue;
+    }
+    throw error;
+  }
+  throw new Error(
+    "メンバーの更新に失敗しました。データベースのスキーマが最新ではない可能性があります。"
+  );
+}
+
 /**
  * メンバーを新規登録する。Supabase未設定時はダミーデータとしてlocalStorageに保存する。
  */
@@ -368,16 +487,24 @@ export async function createMember(
   const fallbackAvatar = sampleAvatarUrl(input.name);
   const photo_icon_url = await resolvePhotoUrl(photos.iconFile, fallbackAvatar, id, "icon");
   const photo_bust_url = await resolvePhotoUrl(photos.bustFile, fallbackAvatar, id, "bust");
+  const { attachment_url, attachment_name } = await resolveAttachment(
+    photos.attachmentFile,
+    photos.removeAttachment,
+    { attachment_url: "", attachment_name: "" },
+    id
+  );
 
   if (supabase) {
-    const { data, error } = await supabase
-      .from("members")
-      .insert({ id, ...input, photo_icon_url, photo_bust_url, sort_order: Date.now() })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as Member;
+    const data = await insertMemberSafely({
+      id,
+      ...input,
+      photo_icon_url,
+      photo_bust_url,
+      attachment_url,
+      attachment_name,
+      sort_order: Date.now(),
+    });
+    return normalizeMember(data);
   }
 
   const member: Member = {
@@ -385,6 +512,8 @@ export async function createMember(
     ...input,
     photo_icon_url,
     photo_bust_url,
+    attachment_url,
+    attachment_name,
     sort_order: Date.now(),
     created_at: new Date().toISOString(),
   };
@@ -402,31 +531,41 @@ export async function updateMember(
   id: string,
   input: MemberInput,
   photos: MemberPhotoFiles,
-  existingPhotoUrls: { photo_icon_url: string; photo_bust_url: string }
+  existing: {
+    photo_icon_url: string;
+    photo_bust_url: string;
+    attachment_url: string;
+    attachment_name: string;
+  }
 ): Promise<Member> {
   const photo_icon_url = await resolvePhotoUrl(
     photos.iconFile,
-    existingPhotoUrls.photo_icon_url,
+    existing.photo_icon_url,
     id,
     "icon"
   );
   const photo_bust_url = await resolvePhotoUrl(
     photos.bustFile,
-    existingPhotoUrls.photo_bust_url,
+    existing.photo_bust_url,
     id,
     "bust"
   );
+  const { attachment_url, attachment_name } = await resolveAttachment(
+    photos.attachmentFile,
+    photos.removeAttachment,
+    { attachment_url: existing.attachment_url, attachment_name: existing.attachment_name },
+    id
+  );
 
   if (supabase) {
-    const { data, error } = await supabase
-      .from("members")
-      .update({ ...input, photo_icon_url, photo_bust_url })
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as Member;
+    const data = await updateMemberSafely(id, {
+      ...input,
+      photo_icon_url,
+      photo_bust_url,
+      attachment_url,
+      attachment_name,
+    });
+    return normalizeMember(data);
   }
 
   const members = loadDummyMembers();
@@ -438,6 +577,8 @@ export async function updateMember(
     ...input,
     photo_icon_url,
     photo_bust_url,
+    attachment_url,
+    attachment_name,
   };
   members[index] = updated;
   saveDummyMembers(members);
