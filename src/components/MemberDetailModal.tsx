@@ -1,7 +1,13 @@
 "use client";
 
-import { X, Mail, Phone, Globe, Award, FileText } from "lucide-react";
+import { useState } from "react";
+import { X, Mail, Phone, Globe, Award, FileText, Download } from "lucide-react";
+import { pdf } from "@react-pdf/renderer";
 import type { Member } from "@/lib/members";
+import { registerPdfFonts } from "@/lib/pdf/fonts";
+import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
+import OneToOneSheetDocument from "@/lib/pdf/OneToOneSheetDocument";
+import { getErrorMessage } from "@/lib/errorMessage";
 
 export default function MemberDetailModal({
   member,
@@ -10,6 +16,35 @@ export default function MemberDetailModal({
   member: Member;
   onClose: () => void;
 }) {
+  const [generatingSheet, setGeneratingSheet] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+
+  async function handleDownloadOneToOneSheet() {
+    setGeneratingSheet(true);
+    setSheetError(null);
+    try {
+      registerPdfFonts();
+      const qrCodeDataUrl = member.show_qr_code
+        ? await generateQrDataUrl(memberProfileUrl(member.id))
+        : null;
+      const blob = await pdf(
+        <OneToOneSheetDocument member={member} qrCodeDataUrl={qrCodeDataUrl} />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `1to1シート_${member.name || member.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setSheetError(getErrorMessage(err));
+    } finally {
+      setGeneratingSheet(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
@@ -23,15 +58,30 @@ export default function MemberDetailModal({
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             メンバー詳細
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-            aria-label="閉じる"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={handleDownloadOneToOneSheet}
+              disabled={generatingSheet}
+              className="flex items-center gap-1 rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
+            >
+              <Download size={12} />
+              {generatingSheet ? "生成中..." : "1to1シート出力"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+              aria-label="閉じる"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
+
+        {sheetError && (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">{sheetError}</p>
+        )}
 
         <div className="mt-4 flex items-center gap-4">
           {/* eslint-disable-next-line @next/next/no-img-element -- photo_icon_url may be a data URL or arbitrary remote host */}

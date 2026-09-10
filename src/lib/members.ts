@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { uploadMemberPhoto } from "@/lib/memberPhotos";
 import { uploadMemberAttachment } from "@/lib/memberAttachments";
+import { fileToDataUrl } from "@/lib/fileToDataUrl";
 
 export interface CustomField {
   key: string;
@@ -326,15 +327,6 @@ function loadDummyMembers(): Member[] {
 function saveDummyMembers(members: Member[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(members));
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 /**

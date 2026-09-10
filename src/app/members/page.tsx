@@ -16,6 +16,7 @@ import MemberCard from "@/components/MemberCard";
 import SortableMemberCard from "@/components/SortableMemberCard";
 import MemberForm from "@/components/MemberForm";
 import MemberDetailModal from "@/components/MemberDetailModal";
+import PresenterReminderBanner from "@/components/PresenterReminderBanner";
 
 type Tab = "list" | "edit";
 type SortKey = "kana" | "team" | "created" | "manual";
@@ -156,6 +157,10 @@ export default function MembersPage() {
             追加・編集
           </button>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <PresenterReminderBanner />
       </div>
 
       {!isSupabaseConfigured && (

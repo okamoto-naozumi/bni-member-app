@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, LayoutGrid, FileText, Grid3x3 } from "lucide-react";
+import { Users, LayoutGrid, FileText, Grid3x3, CalendarClock, Megaphone } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/members", label: "メンバー登録", icon: Users },
   { href: "/groups", label: "グループ編成", icon: LayoutGrid },
   { href: "/matrix", label: "サークルマップ", icon: Grid3x3 },
+  { href: "/presenters", label: "メインプレゼン", icon: CalendarClock },
+  { href: "/referrals", label: "リファーラル掲示板", icon: Megaphone },
   { href: "/pdf", label: "PDF出力", icon: FileText },
 ];
 
