@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, LayoutGrid, FileText, Grid3x3, CalendarClock, Megaphone } from "lucide-react";
+import {
+  Users,
+  LayoutGrid,
+  FileText,
+  Grid3x3,
+  CalendarClock,
+  Megaphone,
+  Library,
+  Info,
+} from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/members", label: "メンバー登録", icon: Users },
@@ -10,7 +19,9 @@ const NAV_ITEMS = [
   { href: "/matrix", label: "サークルマップ", icon: Grid3x3 },
   { href: "/presenters", label: "メインプレゼン", icon: CalendarClock },
   { href: "/referrals", label: "リファーラル掲示板", icon: Megaphone },
+  { href: "/library", label: "ライブラリ", icon: Library },
   { href: "/pdf", label: "PDF出力", icon: FileText },
+  { href: "/about", label: "概要・ガイド", icon: Info },
 ];
 
 export default function NavHeader() {

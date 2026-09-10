@@ -252,3 +252,39 @@ create policy "Authenticated users can delete presentation materials"
   on storage.objects for delete
   to authenticated
   using (bucket_id = 'presentation-materials');
+
+-- Library links (資料ライブラリ。Googleドライブ等の外部共有リンク集)
+create table if not exists public.library_links (
+  id uuid primary key default gen_random_uuid(),
+  title text not null
+);
+
+alter table public.library_links add column if not exists description text;
+alter table public.library_links add column if not exists url text;
+alter table public.library_links add column if not exists category text;
+alter table public.library_links add column if not exists created_at timestamptz not null default now();
+
+alter table public.library_links enable row level security;
+
+drop policy if exists "Library links are publicly readable" on public.library_links;
+create policy "Library links are publicly readable"
+  on public.library_links for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert library links" on public.library_links;
+create policy "Authenticated users can insert library links"
+  on public.library_links for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update library links" on public.library_links;
+create policy "Authenticated users can update library links"
+  on public.library_links for update
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can delete library links" on public.library_links;
+create policy "Authenticated users can delete library links"
+  on public.library_links for delete
+  to authenticated
+  using (true);
