@@ -13,6 +13,7 @@ import {
 import { getErrorMessage } from "@/lib/errorMessage";
 import PresentationForm from "@/components/PresentationForm";
 import PresenterReminderBanner from "@/components/PresenterReminderBanner";
+import ShareButtons from "@/components/ShareButtons";
 
 type ViewMode = "list" | "calendar";
 
@@ -350,15 +351,21 @@ function PresentationSection({
                   </p>
                 </div>
                 {p.material_url && (
-                  <a
-                    href={p.material_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-950/30 dark:text-sky-400 dark:hover:bg-sky-950/50"
-                  >
-                    <FileText size={12} />
-                    資料
-                  </a>
+                  <>
+                    <a
+                      href={p.material_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-950/30 dark:text-sky-400 dark:hover:bg-sky-950/50"
+                    >
+                      <FileText size={12} />
+                      資料
+                    </a>
+                    <ShareButtons
+                      url={p.material_url}
+                      text={`${formatDateLabel(p.presentation_date)}のプレゼン資料${p.theme ? `「${p.theme}」` : ""}`}
+                    />
+                  </>
                 )}
                 <div className="flex shrink-0 items-center gap-1">
                   <button

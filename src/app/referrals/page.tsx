@@ -14,6 +14,7 @@ import {
 import { getCategoryColor } from "@/lib/categoryColors";
 import { getErrorMessage } from "@/lib/errorMessage";
 import ReferralRequestForm from "@/components/ReferralRequestForm";
+import ShareButtons from "@/components/ShareButtons";
 
 type FilterKey = "all" | ReferralRequestStatus;
 type ViewMode = "card" | "list";
@@ -207,6 +208,11 @@ export default function ReferralsPage() {
                   <Users size={12} />
                   紹介窓口: {contact?.name ?? "未設定"}
                 </div>
+
+                <ShareButtons
+                  url="/referrals"
+                  text={`【${r.category}】${r.power_team ? `${r.power_team}の` : ""}リファーラル募集`}
+                />
 
                 <div className="mt-2 flex items-center gap-1 self-end">
                   <button

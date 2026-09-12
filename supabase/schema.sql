@@ -364,3 +364,76 @@ create policy "Authenticated users can delete events"
   on public.events for delete
   to authenticated
   using (true);
+
+-- One-on-ones (1to1実施マトリクス。1ペアにつき1レコード。ユニーク制約はDBに張らずアプリ側で保証する)
+create table if not exists public.one_on_ones (
+  id uuid primary key default gen_random_uuid(),
+  member_a_id uuid not null references public.members(id) on delete cascade,
+  member_b_id uuid not null references public.members(id) on delete cascade
+);
+
+alter table public.one_on_ones add column if not exists completed_at date not null default current_date;
+alter table public.one_on_ones add column if not exists note text;
+alter table public.one_on_ones add column if not exists created_at timestamptz not null default now();
+
+alter table public.one_on_ones enable row level security;
+
+drop policy if exists "One-on-ones are publicly readable" on public.one_on_ones;
+create policy "One-on-ones are publicly readable"
+  on public.one_on_ones for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert one-on-ones" on public.one_on_ones;
+create policy "Authenticated users can insert one-on-ones"
+  on public.one_on_ones for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update one-on-ones" on public.one_on_ones;
+create policy "Authenticated users can update one-on-ones"
+  on public.one_on_ones for update
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can delete one-on-ones" on public.one_on_ones;
+create policy "Authenticated users can delete one-on-ones"
+  on public.one_on_ones for delete
+  to authenticated
+  using (true);
+
+-- Visitor invites (ビジター招待・追跡ボード)
+create table if not exists public.visitor_invites (
+  id uuid primary key default gen_random_uuid(),
+  visitor_name text not null
+);
+
+alter table public.visitor_invites add column if not exists category text;
+alter table public.visitor_invites add column if not exists inviter_member_id uuid references public.members(id) on delete set null;
+alter table public.visitor_invites add column if not exists status text not null default 'invited';
+alter table public.visitor_invites add column if not exists notes text;
+alter table public.visitor_invites add column if not exists created_at timestamptz not null default now();
+
+alter table public.visitor_invites enable row level security;
+
+drop policy if exists "Visitor invites are publicly readable" on public.visitor_invites;
+create policy "Visitor invites are publicly readable"
+  on public.visitor_invites for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert visitor invites" on public.visitor_invites;
+create policy "Authenticated users can insert visitor invites"
+  on public.visitor_invites for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update visitor invites" on public.visitor_invites;
+create policy "Authenticated users can update visitor invites"
+  on public.visitor_invites for update
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can delete visitor invites" on public.visitor_invites;
+create policy "Authenticated users can delete visitor invites"
+  on public.visitor_invites for delete
+  to authenticated
+  using (true);

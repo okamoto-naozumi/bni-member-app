@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Info, Pencil, Trash2 } from "lucide-react";
 import type { Member } from "@/lib/members";
+import ShareButtons from "@/components/ShareButtons";
 
 export default function MemberCard({
   member,
@@ -158,6 +159,10 @@ export default function MemberCard({
             ))}
           </dl>
         )}
+
+        <div className="mt-2">
+          <ShareButtons url={`/m/${member.id}`} text={`${member.name}さんのデジタル名刺`} />
+        </div>
       </div>
     </div>
   );

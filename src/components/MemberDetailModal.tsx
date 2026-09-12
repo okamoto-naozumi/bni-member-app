@@ -8,6 +8,7 @@ import { registerPdfFonts } from "@/lib/pdf/fonts";
 import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
 import OneToOneSheetDocument from "@/lib/pdf/OneToOneSheetDocument";
 import { getErrorMessage } from "@/lib/errorMessage";
+import ShareButtons from "@/components/ShareButtons";
 
 export default function MemberDetailModal({
   member,
@@ -82,6 +83,10 @@ export default function MemberDetailModal({
         {sheetError && (
           <p className="mt-2 text-xs text-red-600 dark:text-red-400">{sheetError}</p>
         )}
+
+        <div className="mt-3">
+          <ShareButtons url={`/m/${member.id}`} text={`${member.name}さんのデジタル名刺・1to1シート`} />
+        </div>
 
         <div className="mt-4 flex items-center gap-4">
           {/* eslint-disable-next-line @next/next/no-img-element -- photo_icon_url may be a data URL or arbitrary remote host */}

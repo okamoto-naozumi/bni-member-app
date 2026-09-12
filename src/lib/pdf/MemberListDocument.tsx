@@ -1,6 +1,7 @@
 import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import type { Member } from "@/lib/members";
 import { getCategoryColor } from "@/lib/categoryColors";
+import { getPowerTeamForCategory } from "@/lib/memberPowerTeams";
 import { resolvePdfImageSrc } from "@/lib/pdf/imageSrc";
 
 const styles = StyleSheet.create({
@@ -90,12 +91,18 @@ const styles = StyleSheet.create({
   },
   badgeRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     marginTop: 3,
   },
   badge: {
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    marginRight: 4,
+    marginTop: 2,
+  },
+  powerTeamBadge: {
+    backgroundColor: "#E0E7FF",
   },
   badgeText: {
     fontSize: 7,
@@ -208,6 +215,11 @@ export default function MemberListDocument({
                         <View style={[styles.badge, { backgroundColor: color.bg }]}>
                           <Text style={[styles.badgeText, { color: color.text }]}>
                             {member.category}
+                          </Text>
+                        </View>
+                        <View style={[styles.badge, styles.powerTeamBadge]}>
+                          <Text style={[styles.badgeText, { color: "#3730A3" }]}>
+                            {getPowerTeamForCategory(member.category)}
                           </Text>
                         </View>
                       </View>
