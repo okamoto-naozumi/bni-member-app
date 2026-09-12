@@ -43,6 +43,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
   - `/presenters` — メインプレゼンター管理(週次スケジュールのリスト/カレンダー表示)
   - `/referrals` — パワーチーム別リファーラル募集掲示板
   - `/library` — 資料ライブラリ(Googleドライブ等の外部共有リンク集)
+  - `/calendar` — カレンダー(月/週/日表示切り替え、カテゴリ別フィルタ、予定のCRUD、CSVインポート/エクスポート)
   - `/pdf` — PDF帳票プレビュー・ダウンロード(メンバーリスト、グループ配置)
   - `/about` — アバウト・利用ガイド(全機能の概要と使い方を説明する静的ページ)
   - `/settings/teams` — チーム(委員会)マスタ管理
@@ -54,7 +55,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 ## データアクセス層の設計パターン(重要・踏襲すること)
 
-`src/lib/members.ts` `presentations.ts` `referralRequests.ts` `teams.ts` は全て同じ形:
+`src/lib/members.ts` `presentations.ts` `referralRequests.ts` `teams.ts` `events.ts` `eventCategories.ts` は全て同じ形:
 
 ```ts
 export async function fetchX(): Promise<X[]> {
@@ -82,7 +83,7 @@ export async function fetchX(): Promise<X[]> {
 2. **カラム名ゆれの自動フォールバック**(`src/lib/presentations.ts` の `withDateColumnFallback`)
    `presentations` テーブルの日付カラムが `presentation_date` でも `present_date` でもエラーにならないよう、両方の名前を試して成功した方をセッション内でキャッシュする。**特定カラムの命名ゆれに対する専用実装**であり、1番の汎用ドロップ方式とは別物。同様の問題が別テーブルで起きた場合はこのパターンを流用してよいが、まず「本当にカラム名が違うのか」を疑うこと(場当たり的にフォールバックを増やすと本当のバグを隠す)。
 3. エラー表示は必ず `src/lib/errorMessage.ts` の `getErrorMessage(err)` を通すこと。SupabaseのPostgrestErrorは `Error` のインスタンスではないため、素朴に `String(err)` すると `[object Object]` になる(過去に実際に起きた不具合)。
-4. **例外: `src/lib/libraryLinks.ts` はエラーを画面に伝播させず、Supabaseアクセスが失敗したら黙ってlocalStorageにフォールバックする**(`withLocalFallback` ヘルパー)。members/presentations/referralRequestsは失敗をユーザーに知らせる設計だが、library_linksは「`library_links` テーブル未作成でもライブラリ機能自体は使えてほしい」という要件のため意図的に例外としている。新しいエンティティを追加する際は、エラーを表示すべきか黙ってフォールバックすべきかを都度判断すること(デフォルトはエラー表示、明示的な要件があれば黙ってフォールバック)。
+4. **例外: `src/lib/libraryLinks.ts` `src/lib/events.ts` `src/lib/eventCategories.ts` はエラーを画面に伝播させず、Supabaseアクセスが失敗したら黙ってlocalStorageにフォールバックする**(`withLocalFallback` ヘルパー、各ファイルに同じ実装を個別に持つ)。members/presentations/referralRequestsは失敗をユーザーに知らせる設計だが、これらは「テーブル未作成・通信エラーでも機能自体は使えてほしい」という明示的な要件のため意図的に例外としている(カレンダー機能は要件定義時点でこの挙動が明示的に指定された)。新しいエンティティを追加する際は、エラーを表示すべきか黙ってフォールバックすべきかを都度判断すること(デフォルトはエラー表示、明示的な要件があれば黙ってフォールバック)。
 
 ### ファイルアップロードの設計パターン
 
@@ -91,6 +92,12 @@ export async function fetchX(): Promise<X[]> {
 - 未設定時: `src/lib/fileToDataUrl.ts` でdata URLに変換してlocalStorageに保存
 
 呼び出し側(`members.ts` の `resolveAttachment` 等)は「新しいファイルが来たらアップロード、来なければ既存URL維持、削除フラグが立っていれば空にする」という3分岐を共通で持つ。
+
+## 命名の注意: `categories.ts` と `eventCategories.ts` は別物
+
+- `src/lib/categories.ts` — メンバーの業種カテゴリ定数 `MEMBER_CATEGORIES`(税理士、司法書士…)を定義する**静的な定数ファイル**。DBアクセスなし。`MemberForm.tsx` `ReferralRequestForm.tsx` `contactCircles.ts`(コンタクトサークルマップ)から参照される。
+- `src/lib/eventCategories.ts` — カレンダー機能の `categories` テーブル(id/name/sort_order)に対する**CRUDデータアクセス層**。`fetchCategories` `createCategory` `updateCategory` `deleteCategory` `ensureCategoryByName` を提供。
+- 過去に一度、カレンダー機能追加時にこの2つを混同して `categories.ts` を上書きしてしまいそうになったことがある。**カレンダー関連のカテゴリを触るときは `eventCategories.ts` を使うこと。`categories.ts` を書き換えると業種カテゴリ・コンタクトサークルマップが壊れる。**
 
 ## Supabaseスキーマ概要
 
@@ -124,6 +131,37 @@ export async function fetchX(): Promise<X[]> {
 
 型定義・CRUD関数は `src/lib/libraryLinks.ts`。**このテーブルだけはエラー時に黙ってlocalStorageへフォールバックする**(上記「PostgrestError対策」4番参照)。
 
+### `categories`(カレンダーのカテゴリマスタ)
+
+`id`(uuid, PK) `name`(unique, not null) `sort_order`(bigint) `created_at`。型定義・CRUD関数は `src/lib/eventCategories.ts`(メンバー業種カテゴリの `src/lib/categories.ts` とは別物。上記「命名の注意」参照)。CSVインポート時に未知のカテゴリ名があれば `ensureCategoryByName` が自動作成する。
+
+### `events`(カレンダーの予定)
+
+`id`(uuid, PK) `title`(not null) `start_time` `end_time`(いずれも `"YYYY-MM-DDTHH:mm"` 形式の素の文字列、text型。タイムゾーン変換によるズレを避けるため timestamptz を使わずアプリ側で完結させている) `category_id`(uuid, `categories.id` へのFK, on delete set null) `color`(背景色、例: `#3b82f6`) `description` `location` `zoom_url` `created_at`
+
+型定義・CRUD関数は `src/lib/events.ts`。終了日時が未入力の場合は `resolveEndTime()` が開始日時をそのまま適用する(所要時間0分)。CSVインポート/エクスポートは `src/lib/eventsCsv.ts` が担当する。
+
+#### カレンダーCSVフォーマット(14列、ヘッダー行あり、UTF-8 BOM付き、CRLF改行)
+
+| # | 列名 | 内容 |
+|---|------|------|
+| 1 | タイトル | イベント名(必須) |
+| 2 | 開始年 | 例: 2026 |
+| 3 | 開始月 | 例: 9 |
+| 4 | 開始日 | 例: 15 |
+| 5 | 開始時間 | 例: 09:00(必須。開始年月日と合わせて `start_time` を構成) |
+| 6 | 終了年 | 空欄可 |
+| 7 | 終了月 | 空欄可 |
+| 8 | 終了日 | 空欄可 |
+| 9 | 終了時間 | 空欄可(6〜9のいずれかが空なら開始日時を自動補完) |
+| 10 | 詳細 | `description` |
+| 11 | 場所 | `location` |
+| 12 | Zoomリンク | `zoom_url` |
+| 13 | 背景色 | `color`(例: `#3b82f6`。空欄なら既定色を使用) |
+| 14 | カテゴリ名 | `categories.name` と名寄せ。存在しなければ自動でカテゴリを新規作成 |
+
+タイトルまたは開始日時(2〜5列目)が欠けている行はインポート時にスキップされる。パース・生成ロジックはいずれも `src/lib/eventsCsv.ts` に実装されている(独自の軽量CSVパーサ。引用符・カンマ・改行を含むフィールドに対応)。
+
 ### Storageバケット(すべてpublic)
 
 - `member-photos` — 顔写真(アイコン/バストアップ)
@@ -140,6 +178,7 @@ export async function fetchX(): Promise<X[]> {
 - **PDF出力**(`/pdf`): メンバーリストPDF(QRコード付き)、グループ配置PDF。プレビュー付きダウンロード
 - **メインプレゼンター管理**(`/presenters`): リスト表示(今後の予定/過去の実績)とカレンダー表示(月グリッド)の切り替え、プレゼン資料アップロード、次回プレゼンターのカウントダウンリマインドバナー(`/presenters` と `/members` の画面上部に表示)
 - **リファーラル募集掲示板**(`/referrals`): ステータス別フィルタ(全て/募集中/調整中/充足)、カテゴリ色分けバッジ、パワーチームタグ、紹介窓口メンバー表示
+- **カレンダー**(`/calendar`): 月/週/日ビュー切り替え、`categories` テーブルから動的生成されるカテゴリタブでの絞り込み、当日セルのハイライト、予定クリックでの詳細表示・編集モーダル、終了日時未入力時の自動補完(開始日時を適用)、14列CSVインポート/エクスポート(カテゴリ名の名寄せ自動作成込み)
 - **資料ライブラリ**(`/library`): Googleドライブ等の外部共有リンクをタイトル・説明文・カテゴリ付きで登録、カテゴリ別フィルタ、「開く」ボタンで別タブ表示、追加・編集・削除モーダル
 - **アバウト・利用ガイド**(`/about`): 全機能(メンバー管理/1to1シートPDF/メインプレゼンターカレンダー/リファーラル掲示板/資料ライブラリ)の目的・使い方を紹介する静的な説明ページ。レスポンシブ・ライト/ダーク対応
 - **チーム管理**(`/settings/teams`): 委員会の追加・編集・削除
@@ -156,13 +195,14 @@ export async function fetchX(): Promise<X[]> {
 
 ## 開発経緯(主なコミット、直近が上)
 
-1. `Add /about guide page and /library shared links page with CLAUDE.md update` — アバウト・利用ガイドページ、資料ライブラリページ、ナビゲーション追加
-2. `Display QR code directly on member card, fix presenter column query, and populate member select options` — QRコード常時表示化、presentationsのカラム名フォールバック、担当メンバー選択肢のバグ修正
-3. `Add 1to1 PDF generator, weekly presenter calendar, and referral request board` — 3機能追加(1to1シートPDF、プレゼンカレンダー、リファーラル掲示板)
-4. `Fix [object Object] error display and add PDF attachment support for members` — エラー表示の`getErrorMessage`統一、メンバー添付資料アップロード機能
-5. `Add member detail modal, layout adjustment, and profile field extensions` — QRコード配置変更、詳細モーダル新設、金銀銅リファーラル等のプロフィール項目拡張
-6. `Fix missing fields and font style in PDF generator` / `会員リストPDFに連絡先とメールアドレスの表示を追加` — PDF帳票の改善
-7. `Initial commit` — プロジェクト初期状態(Create Next App由来)
+1. `Add /calendar with dynamic category filtering, CSV import/export, and CLAUDE.md update` — カレンダー機能(月/週/日ビュー、動的カテゴリフィルタ、CSVインポート/エクスポート)追加
+2. `Add /about guide page and /library shared links page with CLAUDE.md update` — アバウト・利用ガイドページ、資料ライブラリページ、ナビゲーション追加
+3. `Display QR code directly on member card, fix presenter column query, and populate member select options` — QRコード常時表示化、presentationsのカラム名フォールバック、担当メンバー選択肢のバグ修正
+4. `Add 1to1 PDF generator, weekly presenter calendar, and referral request board` — 3機能追加(1to1シートPDF、プレゼンカレンダー、リファーラル掲示板)
+5. `Fix [object Object] error display and add PDF attachment support for members` — エラー表示の`getErrorMessage`統一、メンバー添付資料アップロード機能
+6. `Add member detail modal, layout adjustment, and profile field extensions` — QRコード配置変更、詳細モーダル新設、金銀銅リファーラル等のプロフィール項目拡張
+7. `Fix missing fields and font style in PDF generator` / `会員リストPDFに連絡先とメールアドレスの表示を追加` — PDF帳票の改善
+8. `Initial commit` — プロジェクト初期状態(Create Next App由来)
 
 ## 本番デプロイ時の注意
 

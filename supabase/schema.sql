@@ -288,3 +288,79 @@ create policy "Authenticated users can delete library links"
   on public.library_links for delete
   to authenticated
   using (true);
+
+-- Categories (カレンダーのカテゴリマスタ。CSVインポート時に名寄せ補完で自動作成されることもある)
+create table if not exists public.categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique
+);
+
+alter table public.categories add column if not exists sort_order bigint not null default 0;
+alter table public.categories add column if not exists created_at timestamptz not null default now();
+
+alter table public.categories enable row level security;
+
+drop policy if exists "Categories are publicly readable" on public.categories;
+create policy "Categories are publicly readable"
+  on public.categories for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert categories" on public.categories;
+create policy "Authenticated users can insert categories"
+  on public.categories for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update categories" on public.categories;
+create policy "Authenticated users can update categories"
+  on public.categories for update
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can delete categories" on public.categories;
+create policy "Authenticated users can delete categories"
+  on public.categories for delete
+  to authenticated
+  using (true);
+
+-- Events (カレンダー機能の予定)
+create table if not exists public.events (
+  id uuid primary key default gen_random_uuid(),
+  title text not null
+);
+
+-- start_time / end_time はタイムゾーン変換によるズレを避けるため、
+-- "YYYY-MM-DDTHH:mm" 形式の素の文字列として text 型で保持する(timestamptzは使わない)。
+alter table public.events add column if not exists start_time text not null default '';
+alter table public.events add column if not exists end_time text not null default '';
+alter table public.events add column if not exists category_id uuid references public.categories(id) on delete set null;
+alter table public.events add column if not exists color text not null default '#3b82f6';
+alter table public.events add column if not exists description text;
+alter table public.events add column if not exists location text;
+alter table public.events add column if not exists zoom_url text;
+alter table public.events add column if not exists created_at timestamptz not null default now();
+
+alter table public.events enable row level security;
+
+drop policy if exists "Events are publicly readable" on public.events;
+create policy "Events are publicly readable"
+  on public.events for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert events" on public.events;
+create policy "Authenticated users can insert events"
+  on public.events for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update events" on public.events;
+create policy "Authenticated users can update events"
+  on public.events for update
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can delete events" on public.events;
+create policy "Authenticated users can delete events"
+  on public.events for delete
+  to authenticated
+  using (true);
