@@ -80,10 +80,10 @@ export async function fetchX(): Promise<X[]> {
 
 1. **列が存在しない場合の自動フォールバック**(`src/lib/postgrestError.ts` の `extractMissingColumn`)
    本番DBのマイグレーション(`schema.sql`の再実行)が漏れていて新しいカラムが存在しない場合、insert/updateのペイロードからそのカラムを自動的に除いて再送信する。`members.ts` の `insertMemberSafely` / `updateMemberSafely` が使用。
-2. **カラム名ゆれの自動フォールバック**(`src/lib/presentations.ts` の `withDateColumnFallback`)
-   `presentations` テーブルの日付カラムが `presentation_date` でも `present_date` でもエラーにならないよう、両方の名前を試して成功した方をセッション内でキャッシュする。**特定カラムの命名ゆれに対する専用実装**であり、1番の汎用ドロップ方式とは別物。同様の問題が別テーブルで起きた場合はこのパターンを流用してよいが、まず「本当にカラム名が違うのか」を疑うこと(場当たり的にフォールバックを増やすと本当のバグを隠す)。
+2. **カラム名ゆれの自動フォールバック**(`src/lib/presentations.ts` の `withDateColumnFallback`、`src/lib/referralRequests.ts` の `withTeamColumnFallback`)
+   `presentations` テーブルの日付カラムが `presentation_date` でも `present_date` でもエラーにならないよう、両方の名前を試して成功した方をセッション内でキャッシュする。同様に `referral_requests` テーブルの対象パワーチームカラムも `power_team` / `team` の両方を試す。**特定カラムの命名ゆれに対する専用実装**であり、1番の汎用ドロップ方式とは別物。この方式はinsert/updateのペイロードに実際のカラム名を指定する必要がある場合に使う(select("*")は存在するカラムをそのまま返すだけなので、読み取り側は `row.power_team ?? row.team ?? ""` のように両方を見るだけで済み、リトライは不要)。同様の問題が別テーブルで起きた場合はこのパターンを流用してよいが、まず「本当にカラム名が違うのか」を疑うこと(場当たり的にフォールバックを増やすと本当のバグを隠す)。
 3. エラー表示は必ず `src/lib/errorMessage.ts` の `getErrorMessage(err)` を通すこと。SupabaseのPostgrestErrorは `Error` のインスタンスではないため、素朴に `String(err)` すると `[object Object]` になる(過去に実際に起きた不具合)。
-4. **例外: `src/lib/libraryLinks.ts` `src/lib/events.ts` `src/lib/eventCategories.ts` はエラーを画面に伝播させず、Supabaseアクセスが失敗したら黙ってlocalStorageにフォールバックする**(`withLocalFallback` ヘルパー、各ファイルに同じ実装を個別に持つ)。members/presentations/referralRequestsは失敗をユーザーに知らせる設計だが、これらは「テーブル未作成・通信エラーでも機能自体は使えてほしい」という明示的な要件のため意図的に例外としている(カレンダー機能は要件定義時点でこの挙動が明示的に指定された)。新しいエンティティを追加する際は、エラーを表示すべきか黙ってフォールバックすべきかを都度判断すること(デフォルトはエラー表示、明示的な要件があれば黙ってフォールバック)。
+4. **例外: `src/lib/libraryLinks.ts` `src/lib/events.ts` `src/lib/eventCategories.ts` `src/lib/referralRequests.ts` はエラーを画面に伝播させず、Supabaseアクセスが失敗したら黙ってlocalStorageにフォールバックする**(`withLocalFallback` ヘルパー、各ファイルに同じ実装を個別に持つ)。members/presentationsは失敗をユーザーに知らせる設計だが、これらは「テーブル未作成・通信エラーでも機能自体は使えてほしい」という明示的な要件のため意図的に例外としている(カレンダー機能・リファーラル掲示板ともに要件定義時点でこの挙動が明示的に指定された)。新しいエンティティを追加する際は、エラーを表示すべきか黙ってフォールバックすべきかを都度判断すること(デフォルトはエラー表示、明示的な要件があれば黙ってフォールバック)。
 
 ### ファイルアップロードの設計パターン
 
@@ -124,6 +124,8 @@ export async function fetchX(): Promise<X[]> {
 `id`(uuid, PK) `category`(募集カテゴリ、not null) `power_team`(対象パワーチーム) `description`(詳細説明) `contact_member_id`(uuid, `members.id` へのFK、紹介窓口) `status`(`'open' | 'in_progress' | 'fulfilled'`、DB上はcheck制約なしtext、アプリ側でバリデーション) `created_at`
 
 型定義は `src/lib/referralRequests.ts`。ステータスの日本語ラベルは `REFERRAL_STATUS_LABELS`(募集中/調整中/充足)。
+
+本番DBによっては対象パワーチームのカラム名が `power_team` ではなく `team` になっている場合があり、`withTeamColumnFallback` が両方を試して吸収する(上記「PostgrestError対策」2番参照)。また `referral_requests` は `libraryLinks.ts` 等と同様に、Supabase未設定・通信エラー時は黙ってlocalStorageへフォールバックする(上記4番参照)。
 
 ### `library_links`(資料ライブラリ。Googleドライブ等の外部共有リンク集)
 
@@ -177,7 +179,7 @@ export async function fetchX(): Promise<X[]> {
 - **コンタクトサークルマップ**(`/matrix`): 業種カテゴリをコンタクトサークル(建築/美容健康/経営者サポート/不動産資産/ITクリエイティブ/その他)ごとに分類し、空席カテゴリを「絶賛募集中」で可視化
 - **PDF出力**(`/pdf`): メンバーリストPDF(QRコード付き)、グループ配置PDF。プレビュー付きダウンロード
 - **メインプレゼンター管理**(`/presenters`): リスト表示(今後の予定/過去の実績)とカレンダー表示(月グリッド)の切り替え、プレゼン資料アップロード、次回プレゼンターのカウントダウンリマインドバナー(`/presenters` と `/members` の画面上部に表示)
-- **リファーラル募集掲示板**(`/referrals`): ステータス別フィルタ(全て/募集中/調整中/充足)、カテゴリ色分けバッジ、パワーチームタグ、紹介窓口メンバー表示
+- **リファーラル募集掲示板**(`/referrals`): ステータス別フィルタ(全て/募集中/調整中/充足)、カテゴリ色分けバッジ、パワーチームタグ、紹介窓口メンバー表示、カード表示/リスト表示の切り替え(リスト表示は横長テーブルで募集カテゴリ・対象パワーチーム・詳細説明・紹介窓口・ステータス・操作を1行にまとめ、多件の比較を容易にする。`overflow-x-auto` でモバイルでも崩れないようにしている)
 - **カレンダー**(`/calendar`): 月/週/日ビュー切り替え、`categories` テーブルから動的生成されるカテゴリタブでの絞り込み、当日セルのハイライト、予定クリックでの詳細表示・編集モーダル、終了日時未入力時の自動補完(開始日時を適用)、14列CSVインポート/エクスポート(カテゴリ名の名寄せ自動作成込み)
 - **資料ライブラリ**(`/library`): Googleドライブ等の外部共有リンクをタイトル・説明文・カテゴリ付きで登録、カテゴリ別フィルタ、「開く」ボタンで別タブ表示、追加・編集・削除モーダル
 - **アバウト・利用ガイド**(`/about`): 全機能(メンバー管理/1to1シートPDF/メインプレゼンターカレンダー/リファーラル掲示板/資料ライブラリ)の目的・使い方を紹介する静的な説明ページ。レスポンシブ・ライト/ダーク対応
@@ -195,14 +197,15 @@ export async function fetchX(): Promise<X[]> {
 
 ## 開発経緯(主なコミット、直近が上)
 
-1. `Add /calendar with dynamic category filtering, CSV import/export, and CLAUDE.md update` — カレンダー機能(月/週/日ビュー、動的カテゴリフィルタ、CSVインポート/エクスポート)追加
-2. `Add /about guide page and /library shared links page with CLAUDE.md update` — アバウト・利用ガイドページ、資料ライブラリページ、ナビゲーション追加
-3. `Display QR code directly on member card, fix presenter column query, and populate member select options` — QRコード常時表示化、presentationsのカラム名フォールバック、担当メンバー選択肢のバグ修正
-4. `Add 1to1 PDF generator, weekly presenter calendar, and referral request board` — 3機能追加(1to1シートPDF、プレゼンカレンダー、リファーラル掲示板)
-5. `Fix [object Object] error display and add PDF attachment support for members` — エラー表示の`getErrorMessage`統一、メンバー添付資料アップロード機能
-6. `Add member detail modal, layout adjustment, and profile field extensions` — QRコード配置変更、詳細モーダル新設、金銀銅リファーラル等のプロフィール項目拡張
-7. `Fix missing fields and font style in PDF generator` / `会員リストPDFに連絡先とメールアドレスの表示を追加` — PDF帳票の改善
-8. `Initial commit` — プロジェクト初期状態(Create Next App由来)
+1. `Add list view layout toggle and fix power_team fallback in referral board with CLAUDE.md update` — リファーラル掲示板にカード/リスト表示切り替え追加、power_team/teamカラム名フォールバックとlocalStorageフォールバック対応
+2. `Add /calendar with dynamic category filtering, CSV import/export, and CLAUDE.md update` — カレンダー機能(月/週/日ビュー、動的カテゴリフィルタ、CSVインポート/エクスポート)追加
+3. `Add /about guide page and /library shared links page with CLAUDE.md update` — アバウト・利用ガイドページ、資料ライブラリページ、ナビゲーション追加
+4. `Display QR code directly on member card, fix presenter column query, and populate member select options` — QRコード常時表示化、presentationsのカラム名フォールバック、担当メンバー選択肢のバグ修正
+5. `Add 1to1 PDF generator, weekly presenter calendar, and referral request board` — 3機能追加(1to1シートPDF、プレゼンカレンダー、リファーラル掲示板)
+6. `Fix [object Object] error display and add PDF attachment support for members` — エラー表示の`getErrorMessage`統一、メンバー添付資料アップロード機能
+7. `Add member detail modal, layout adjustment, and profile field extensions` — QRコード配置変更、詳細モーダル新設、金銀銅リファーラル等のプロフィール項目拡張
+8. `Fix missing fields and font style in PDF generator` / `会員リストPDFに連絡先とメールアドレスの表示を追加` — PDF帳票の改善
+9. `Initial commit` — プロジェクト初期状態(Create Next App由来)
 
 ## 本番デプロイ時の注意
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Trash2, Users } from "lucide-react";
+import { LayoutGrid, List, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { fetchMembers, type Member } from "@/lib/members";
 import {
@@ -16,6 +16,7 @@ import { getErrorMessage } from "@/lib/errorMessage";
 import ReferralRequestForm from "@/components/ReferralRequestForm";
 
 type FilterKey = "all" | ReferralRequestStatus;
+type ViewMode = "card" | "list";
 
 const FILTER_OPTIONS: { value: FilterKey; label: string }[] = [
   { value: "all", label: "すべて" },
@@ -42,6 +43,7 @@ export default function ReferralsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [view, setView] = useState<ViewMode>("card");
   const [formState, setFormState] = useState<{ open: boolean; editing: ReferralRequest | null }>({
     open: false,
     editing: null,
@@ -109,21 +111,52 @@ export default function ReferralsPage() {
         </p>
       )}
 
-      <div className="mt-5 flex w-fit flex-wrap items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
-        {FILTER_OPTIONS.map((opt) => (
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex w-fit flex-wrap items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
+          {FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setFilter(opt.value)}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                filter === opt.value
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex w-fit items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
           <button
-            key={opt.value}
             type="button"
-            onClick={() => setFilter(opt.value)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-              filter === opt.value
+            onClick={() => setView("card")}
+            aria-pressed={view === "card"}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              view === "card"
                 ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
                 : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
             }`}
           >
-            {opt.label}
+            <LayoutGrid size={14} />
+            カード表示
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            aria-pressed={view === "list"}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              view === "list"
+                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+            }`}
+          >
+            <List size={14} />
+            リスト表示
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -134,7 +167,7 @@ export default function ReferralsPage() {
         <p className="mt-4 text-sm text-zinc-500">
           該当する募集情報がありません。「募集を追加」から登録してください。
         </p>
-      ) : (
+      ) : view === "card" ? (
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((r) => {
             const color = getCategoryColor(r.category);
@@ -197,6 +230,13 @@ export default function ReferralsPage() {
             );
           })}
         </div>
+      ) : (
+        <ReferralListView
+          items={filtered}
+          memberMap={memberMap}
+          onEdit={(r) => setFormState({ open: true, editing: r })}
+          onDelete={handleDelete}
+        />
       )}
 
       {formState.open && (
@@ -207,6 +247,92 @@ export default function ReferralsPage() {
           onCancel={() => setFormState({ open: false, editing: null })}
         />
       )}
+    </div>
+  );
+}
+
+function ReferralListView({
+  items,
+  memberMap,
+  onEdit,
+  onDelete,
+}: {
+  items: ReferralRequest[];
+  memberMap: Map<string, Member>;
+  onEdit: (r: ReferralRequest) => void;
+  onDelete: (r: ReferralRequest) => void;
+}) {
+  return (
+    <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <table className="w-full min-w-[720px] text-left text-sm">
+        <thead>
+          <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+            <th className="px-4 py-2 font-medium">募集カテゴリ</th>
+            <th className="px-4 py-2 font-medium">対象パワーチーム</th>
+            <th className="px-4 py-2 font-medium">詳細説明</th>
+            <th className="px-4 py-2 font-medium">紹介窓口</th>
+            <th className="px-4 py-2 font-medium">ステータス</th>
+            <th className="px-4 py-2 text-right font-medium">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((r) => {
+            const color = getCategoryColor(r.category);
+            const contact = r.contact_member_id ? memberMap.get(r.contact_member_id) : undefined;
+            return (
+              <tr
+                key={r.id}
+                className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
+              >
+                <td className="px-4 py-3 align-top">
+                  <span
+                    className="inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                    style={{ backgroundColor: color.bg, color: color.text }}
+                  >
+                    {r.category}
+                  </span>
+                </td>
+                <td className="px-4 py-3 align-top text-zinc-600 dark:text-zinc-300">
+                  {r.power_team || "—"}
+                </td>
+                <td className="min-w-[220px] max-w-sm px-4 py-3 align-top text-zinc-600 dark:text-zinc-300">
+                  <p className="line-clamp-2 whitespace-pre-wrap">{r.description || "—"}</p>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 align-top text-zinc-600 dark:text-zinc-300">
+                  {contact?.name ?? "未設定"}
+                </td>
+                <td className="px-4 py-3 align-top">
+                  <span
+                    className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[r.status]}`}
+                  >
+                    {REFERRAL_STATUS_LABELS[r.status]}
+                  </span>
+                </td>
+                <td className="px-4 py-3 align-top">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(r)}
+                      className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      <Pencil size={12} />
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(r)}
+                      className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+                    >
+                      <Trash2 size={12} />
+                      削除
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
