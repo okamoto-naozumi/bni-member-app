@@ -1,7 +1,7 @@
 import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import type { Member } from "@/lib/members";
 import { getCategoryColor } from "@/lib/categoryColors";
-import { resolvePdfImageSrc } from "@/lib/pdf/imageSrc";
+import { PdfAvatar } from "@/lib/pdf/PdfAvatar";
 
 const REFERRAL_TIER_COLORS = {
   gold: { bg: "#FEF3C7", border: "#D97706", text: "#92400E" },
@@ -31,10 +31,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   photo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    objectFit: "cover",
     marginRight: 12,
   },
   title: {
@@ -161,22 +157,30 @@ const styles = StyleSheet.create({
 interface OneToOneSheetDocumentProps {
   member: Member;
   qrCodeDataUrl?: string | null;
+  /** 事前にBase64へ変換済みの写真data URI。未解決の場合はイニシャルバッジにフォールバックする */
+  photoDataUri?: string | null;
 }
 
 export default function OneToOneSheetDocument({
   member,
   qrCodeDataUrl,
+  photoDataUri,
 }: OneToOneSheetDocumentProps) {
   const color = getCategoryColor(member.category);
-  const photo = member.photo_bust_url || member.photo_icon_url;
 
   return (
     <Document title={`1to1シート_${member.name}`}>
       <Page size="A4" style={styles.page}>
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf's Image has no alt prop */}
-            <Image src={() => resolvePdfImageSrc(photo)} style={styles.photo} />
+            <PdfAvatar
+              name={member.name}
+              dataUri={photoDataUri}
+              width={64}
+              height={64}
+              borderRadius={32}
+              style={styles.photo}
+            />
             <View>
               <Text style={styles.title}>1to1 プロファイルシート</Text>
               <View style={styles.nameRow}>

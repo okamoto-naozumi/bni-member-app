@@ -16,6 +16,7 @@ import {
   type GroupPattern,
 } from "@/lib/groupBoard";
 import { registerPdfFonts } from "@/lib/pdf/fonts";
+import { buildImageDataUriMap } from "@/lib/pdf/imageSrc";
 import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
 import MemberListDocument from "@/lib/pdf/MemberListDocument";
 import GroupBoardDocument from "@/lib/pdf/GroupBoardDocument";
@@ -36,6 +37,7 @@ export default function PdfExportPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [downloading, setDownloading] = useState<DocKind | null>(null);
   const [qrCodeMap, setQrCodeMap] = useState<Record<string, string>>({});
+  const [photoDataUriMap, setPhotoDataUriMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     registerPdfFonts();
@@ -57,6 +59,11 @@ export default function PdfExportPage() {
     ).then((entries) => setQrCodeMap(Object.fromEntries(entries)));
   }, [members]);
 
+  useEffect(() => {
+    const urls = members.flatMap((m) => [m.photo_icon_url, m.photo_bust_url]);
+    buildImageDataUriMap(urls).then(setPhotoDataUriMap);
+  }, [members]);
+
   const selectedPattern = patterns.find((p) => p.id === selectedPatternId) ?? null;
   const selectedBoard: Board = useMemo(
     () => selectedPattern?.board ?? emptyBoardFor([]),
@@ -75,15 +82,17 @@ export default function PdfExportPage() {
           chapterName={chapterName}
           slogan={slogan}
           qrCodeMap={qrCodeMap}
+          photoDataUriMap={photoDataUriMap}
         />
       ) : (
         <GroupBoardDocument
           board={selectedBoard}
           groups={selectedGroups}
           chapterName={chapterName}
+          photoDataUriMap={photoDataUriMap}
         />
       ),
-    [members, selectedBoard, selectedGroups, chapterName, slogan, qrCodeMap]
+    [members, selectedBoard, selectedGroups, chapterName, slogan, qrCodeMap, photoDataUriMap]
   );
 
   useEffect(() => {

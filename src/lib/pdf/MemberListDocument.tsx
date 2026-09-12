@@ -2,7 +2,7 @@ import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/
 import type { Member } from "@/lib/members";
 import { getCategoryColor } from "@/lib/categoryColors";
 import { getPowerTeamForCategory } from "@/lib/memberPowerTeams";
-import { resolvePdfImageSrc } from "@/lib/pdf/imageSrc";
+import { PdfAvatar } from "@/lib/pdf/PdfAvatar";
 
 const styles = StyleSheet.create({
   page: {
@@ -60,10 +60,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   photo: {
-    width: 42,
-    height: 54,
-    borderRadius: 4,
-    objectFit: "cover",
     marginRight: 8,
   },
   info: {
@@ -164,6 +160,8 @@ interface MemberListDocumentProps {
   slogan: string;
   /** member.id -> QRコードのdata URL(表示ONのメンバーのみ) */
   qrCodeMap?: Record<string, string>;
+  /** 元の写真URL -> 事前変換済みのBase64 data URI。未解決の場合はイニシャルバッジにフォールバックする */
+  photoDataUriMap?: Record<string, string>;
 }
 
 export default function MemberListDocument({
@@ -171,6 +169,7 @@ export default function MemberListDocument({
   chapterName,
   slogan,
   qrCodeMap = {},
+  photoDataUriMap = {},
 }: MemberListDocumentProps) {
   return (
     <Document title="BNI CHAPTER MEMBER LIST">
@@ -200,8 +199,14 @@ export default function MemberListDocument({
               const photo = member.photo_bust_url || member.photo_icon_url;
               return (
                 <View key={member.id} style={styles.card} wrap={false}>
-                  {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf's Image has no alt prop */}
-                  <Image src={() => resolvePdfImageSrc(photo)} style={styles.photo} />
+                  <PdfAvatar
+                    name={member.name}
+                    dataUri={photoDataUriMap[photo]}
+                    width={42}
+                    height={54}
+                    borderRadius={4}
+                    style={styles.photo}
+                  />
                   <View style={styles.info}>
                     <View style={styles.nameRow}>
                       <Text style={styles.name}>{member.name}</Text>

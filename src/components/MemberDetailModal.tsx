@@ -5,6 +5,7 @@ import { X, Mail, Phone, Globe, Award, FileText, Download } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
 import type { Member } from "@/lib/members";
 import { registerPdfFonts } from "@/lib/pdf/fonts";
+import { resolveImageDataUri } from "@/lib/pdf/imageSrc";
 import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
 import OneToOneSheetDocument from "@/lib/pdf/OneToOneSheetDocument";
 import { getErrorMessage } from "@/lib/errorMessage";
@@ -28,8 +29,15 @@ export default function MemberDetailModal({
       const qrCodeDataUrl = member.show_qr_code
         ? await generateQrDataUrl(memberProfileUrl(member.id))
         : null;
+      const photoDataUri = await resolveImageDataUri(
+        member.photo_bust_url || member.photo_icon_url
+      );
       const blob = await pdf(
-        <OneToOneSheetDocument member={member} qrCodeDataUrl={qrCodeDataUrl} />
+        <OneToOneSheetDocument
+          member={member}
+          qrCodeDataUrl={qrCodeDataUrl}
+          photoDataUri={photoDataUri}
+        />
       ).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

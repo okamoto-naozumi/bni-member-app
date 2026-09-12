@@ -16,6 +16,7 @@ import { deleteMember, fetchMembers, reorderMembers, type Member } from "@/lib/m
 import { getErrorMessage } from "@/lib/errorMessage";
 import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
 import { registerPdfFonts } from "@/lib/pdf/fonts";
+import { buildImageDataUriMap } from "@/lib/pdf/imageSrc";
 import MemberListDocument from "@/lib/pdf/MemberListDocument";
 import { POWER_TEAM_SUGGESTIONS } from "@/lib/powerTeams";
 import { buildPowerTeamGroups, getPowerTeamForCategory } from "@/lib/memberPowerTeams";
@@ -150,12 +151,16 @@ export default function MembersPage() {
     setLoadError(null);
     try {
       registerPdfFonts();
+      const photoDataUriMap = await buildImageDataUriMap(
+        members.flatMap((m) => [m.photo_icon_url, m.photo_bust_url])
+      );
       const blob = await pdf(
         <MemberListDocument
           members={members}
           chapterName={members[0]?.chapter ?? ""}
           slogan=""
           qrCodeMap={qrCodeMap}
+          photoDataUriMap={photoDataUriMap}
         />
       ).toBlob();
       const url = URL.createObjectURL(blob);

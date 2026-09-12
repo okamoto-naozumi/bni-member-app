@@ -1,6 +1,6 @@
-import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { Board, BoardItem, GroupDef } from "@/lib/groupBoard";
-import { resolvePdfImageSrc } from "@/lib/pdf/imageSrc";
+import { PdfAvatar } from "@/lib/pdf/PdfAvatar";
 
 const styles = StyleSheet.create({
   page: {
@@ -75,12 +75,6 @@ const styles = StyleSheet.create({
     marginRight: 4,
     marginBottom: 4,
   },
-  photo: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    objectFit: "cover",
-  },
   proxyBadge: {
     width: 34,
     height: 34,
@@ -106,7 +100,7 @@ const styles = StyleSheet.create({
   },
 });
 
-function GroupItemCard({ item }: { item: BoardItem }) {
+function GroupItemCard({ item, photoDataUriMap }: { item: BoardItem; photoDataUriMap: Record<string, string> }) {
   return (
     <View style={styles.itemCard}>
       {item.kind === "proxy" ? (
@@ -114,8 +108,13 @@ function GroupItemCard({ item }: { item: BoardItem }) {
           <Text style={styles.proxyBadgeText}>{item.label.slice(0, 2)}</Text>
         </View>
       ) : (
-        // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf's Image has no alt prop
-        <Image src={() => resolvePdfImageSrc(item.photoUrl)} style={styles.photo} />
+        <PdfAvatar
+          name={item.label}
+          dataUri={item.photoUrl ? photoDataUriMap[item.photoUrl] : null}
+          width={34}
+          height={34}
+          borderRadius={17}
+        />
       )}
       <Text style={styles.itemLabel}>{item.label}</Text>
     </View>
@@ -126,12 +125,15 @@ interface GroupBoardDocumentProps {
   board: Board;
   groups: GroupDef[];
   chapterName: string;
+  /** 元の写真URL -> 事前変換済みのBase64 data URI。未解決の場合はイニシャルバッジにフォールバックする */
+  photoDataUriMap?: Record<string, string>;
 }
 
 export default function GroupBoardDocument({
   board,
   groups,
   chapterName,
+  photoDataUriMap = {},
 }: GroupBoardDocumentProps) {
   return (
     <Document title="BNI CHAPTER GROUP ASSIGNMENT">
@@ -160,7 +162,9 @@ export default function GroupBoardDocument({
                 {items.length === 0 ? (
                   <Text style={styles.emptyLabel}>未配置</Text>
                 ) : (
-                  items.map((item) => <GroupItemCard key={item.id} item={item} />)
+                  items.map((item) => (
+                    <GroupItemCard key={item.id} item={item} photoDataUriMap={photoDataUriMap} />
+                  ))
                 )}
               </View>
             </View>
