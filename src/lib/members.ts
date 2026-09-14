@@ -381,11 +381,104 @@ function buildSeedMembers(): Member[] {
 }
 
 /**
+ * 略歴・G.A.I.N.S.の全17項目のキー。本番Supabaseがこれらの列を持たない(schema.sqlの
+ * 再実行=手動マイグレーションが未実施)場合、insert/updateはこの列を除いて再送信される
+ * (`insertMemberSafely`/`updateMemberSafely`)ため、DBからの読み取り結果には値が
+ * 一切残らない。これを補うためのlocalStorageキャッシュ(下記)で参照するキー一覧。
+ */
+const BIO_GAINS_FIELD_KEYS = [
+  "bio_past_occupation",
+  "bio_spouse",
+  "bio_family",
+  "bio_pet",
+  "bio_hobby",
+  "bio_other_interests",
+  "bio_hometown",
+  "bio_residence",
+  "bio_residence_years",
+  "bio_strong_desire",
+  "bio_unknown_fact",
+  "bio_success_key",
+  "gains_goals",
+  "gains_accomplishments",
+  "gains_interests",
+  "gains_networks",
+  "gains_skills",
+] as const;
+type BioGainsFieldKey = (typeof BIO_GAINS_FIELD_KEYS)[number];
+type BioGainsFields = Record<BioGainsFieldKey, string>;
+
+// v1: 略歴・G.A.I.N.S.フィールド専用のローカルキャッシュ。
+// memberId -> 各項目の最新入力値、を保持する(members本体のダミーストアとは別物で、
+// Supabase設定の有無にかかわらず常に更新する)。
+const BIO_GAINS_CACHE_KEY = "bni-member-bio-gains-cache-v1";
+
+function loadBioGainsCache(): Record<string, Partial<BioGainsFields>> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(BIO_GAINS_CACHE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveBioGainsCache(cache: Record<string, Partial<BioGainsFields>>): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(BIO_GAINS_CACHE_KEY, JSON.stringify(cache));
+}
+
+/**
+ * フォーム送信時の入力値を無条件でローカルキャッシュへ書き込む。
+ * Supabase側の列が未マイグレーションで実際には保存できなかった場合でも、
+ * 同じブラウザからのアクセスであれば入力内容を「消えていない」状態に保つための保険。
+ */
+function cacheBioGainsFields(id: string, input: MemberInput): void {
+  const cache = loadBioGainsCache();
+  const entry: Partial<BioGainsFields> = {};
+  for (const key of BIO_GAINS_FIELD_KEYS) {
+    entry[key] = input[key];
+  }
+  cache[id] = entry;
+  saveBioGainsCache(cache);
+}
+
+/**
+ * DBから取得したmemberの略歴・G.A.I.N.S.項目が空(=列が存在しない/nullで返ってきた)場合に、
+ * ローカルキャッシュの値で補完する。逆にDB側に値がある場合はキャッシュを最新化する
+ * (マイグレーション後は自然とDBの値が正として使われ続けるようにするため)。
+ */
+function mergeBioGainsCache(member: Member): Member {
+  const cache = loadBioGainsCache();
+  const cached = { ...(cache[member.id] ?? {}) };
+  const merged: Member = { ...member };
+  let cacheChanged = false;
+
+  for (const key of BIO_GAINS_FIELD_KEYS) {
+    const liveValue = member[key];
+    if (liveValue) {
+      if (cached[key] !== liveValue) {
+        cached[key] = liveValue;
+        cacheChanged = true;
+      }
+    } else if (cached[key]) {
+      merged[key] = cached[key];
+    }
+  }
+
+  if (cacheChanged) {
+    cache[member.id] = cached;
+    saveBioGainsCache(cache);
+  }
+
+  return merged;
+}
+
+/**
  * 過去バージョンで保存されたデータ(gold/silver/bronze_referral未対応)や、
  * DBのnull値を安全に補完する。既存データとの互換性維持のためのフォールバック。
  */
 function normalizeMember(member: Member): Member {
-  return {
+  const withDefaults: Member = {
     ...member,
     gold_referral: member.gold_referral ?? "",
     silver_referral: member.silver_referral ?? "",
@@ -413,6 +506,7 @@ function normalizeMember(member: Member): Member {
     gains_networks: member.gains_networks ?? "",
     gains_skills: member.gains_skills ?? "",
   };
+  return mergeBioGainsCache(withDefaults);
 }
 
 function loadDummyMembers(): Member[] {
@@ -535,6 +629,9 @@ async function insertMemberSafely(
 
     const missingColumn = extractMissingColumn(error);
     if (missingColumn && missingColumn in attempt) {
+      console.warn(
+        `[members] Supabaseに列 "${missingColumn}" が存在しないため除外して再試行します。supabase/schema.sql を実行してマイグレーションしてください。`
+      );
       const { [missingColumn]: _omit, ...rest } = attempt;
       attempt = rest;
       continue;
@@ -566,6 +663,9 @@ async function updateMemberSafely(
 
     const missingColumn = extractMissingColumn(error);
     if (missingColumn && missingColumn in attempt) {
+      console.warn(
+        `[members] Supabaseに列 "${missingColumn}" が存在しないため除外して再試行します。supabase/schema.sql を実行してマイグレーションしてください。`
+      );
       const { [missingColumn]: _omit, ...rest } = attempt;
       attempt = rest;
       continue;
@@ -641,6 +741,10 @@ export async function createMember(
     { one_to_one_attachment_url: "", one_to_one_attachment_name: "" },
     id
   );
+
+  // Supabase側の実際の保存可否によらず、入力値をローカルキャッシュへ先に反映しておく
+  // (未マイグレーション環境で列が除外されても、画面上は入力内容が消えないようにするため)。
+  cacheBioGainsFields(id, input);
 
   if (supabase) {
     const data = await insertMemberSafely({
@@ -719,6 +823,10 @@ export async function updateMember(
     },
     id
   );
+
+  // Supabase側の実際の保存可否によらず、入力値をローカルキャッシュへ先に反映しておく
+  // (未マイグレーション環境で列が除外されても、画面上は入力内容が消えないようにするため)。
+  cacheBioGainsFields(id, input);
 
   if (supabase) {
     try {
