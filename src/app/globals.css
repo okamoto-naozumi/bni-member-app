@@ -1,8 +1,32 @@
 @import "tailwindcss";
 
+/* data-theme="dark" (背景設定で「ダーク」選択時)でdark:ユーティリティを有効化する。
+   これによりOSの配色設定ではなく、ユーザーが選んだ背景設定がdark:表示を決定する。 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafafa;
+  --foreground: #18181b;
+}
+
+[data-theme="light"] {
+  --background: #fafafa;
+  --foreground: #18181b;
+}
+
+[data-theme="dark"] {
+  --background: #000000;
+  --foreground: #ededed;
+}
+
+[data-theme="warm"] {
+  --background: #fdf6ec;
+  --foreground: #4a3728;
+}
+
+[data-theme="ocean"] {
+  --background: #eef6fb;
+  --foreground: #0f2a3d;
 }
 
 @theme inline {
@@ -12,8 +36,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* ThemeScript(beforeInteractive)がdata-theme属性を設定できなかった場合のフォールバック */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --background: #0a0a0a;
     --foreground: #ededed;
   }

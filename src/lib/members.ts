@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { uploadMemberPhoto } from "@/lib/memberPhotos";
-import { uploadMemberAttachment } from "@/lib/memberAttachments";
+import { uploadMemberAttachment, uploadOneToOneAttachment } from "@/lib/memberAttachments";
 import { fileToDataUrl } from "@/lib/fileToDataUrl";
 import { extractMissingColumn } from "@/lib/postgrestError";
 
@@ -48,6 +48,46 @@ export interface Member {
   attachment_url: string;
   /** 添付資料の元のファイル名(表示用) */
   attachment_name: string;
+  /** 1to1シート添付ファイル(PDF/画像)の公開URL */
+  one_to_one_attachment_url: string;
+  /** 1to1シート添付ファイルの元のファイル名(表示用) */
+  one_to_one_attachment_name: string;
+  /** 1to1シートの外部共有URL(Googleドライブ等) */
+  one_to_one_sheet_url: string;
+  /** メンバー略歴: 過去に経験した職業 */
+  bio_past_occupation: string;
+  /** メンバー略歴: 配偶者 */
+  bio_spouse: string;
+  /** メンバー略歴: 家族 */
+  bio_family: string;
+  /** メンバー略歴: ペット */
+  bio_pet: string;
+  /** メンバー略歴: 趣味 */
+  bio_hobby: string;
+  /** メンバー略歴: その他の関心事 */
+  bio_other_interests: string;
+  /** メンバー略歴: 出身地 */
+  bio_hometown: string;
+  /** メンバー略歴: 居住地 */
+  bio_residence: string;
+  /** メンバー略歴: 居住年数 */
+  bio_residence_years: string;
+  /** メンバー略歴: 私の強い願望は */
+  bio_strong_desire: string;
+  /** メンバー略歴: 誰も知らない私 */
+  bio_unknown_fact: string;
+  /** メンバー略歴: 私の成功の鍵は */
+  bio_success_key: string;
+  /** G.A.I.N.S.: Goals(目標) */
+  gains_goals: string;
+  /** G.A.I.N.S.: Accomplishments(実績) */
+  gains_accomplishments: string;
+  /** G.A.I.N.S.: Interests(興味) */
+  gains_interests: string;
+  /** G.A.I.N.S.: Networks(人脈) */
+  gains_networks: string;
+  /** G.A.I.N.S.: Skills(スキル) */
+  gains_skills: string;
   created_at: string;
 }
 
@@ -73,6 +113,24 @@ export interface MemberInput {
   instagram_url: string;
   facebook_url: string;
   show_qr_code: boolean;
+  one_to_one_sheet_url: string;
+  bio_past_occupation: string;
+  bio_spouse: string;
+  bio_family: string;
+  bio_pet: string;
+  bio_hobby: string;
+  bio_other_interests: string;
+  bio_hometown: string;
+  bio_residence: string;
+  bio_residence_years: string;
+  bio_strong_desire: string;
+  bio_unknown_fact: string;
+  bio_success_key: string;
+  gains_goals: string;
+  gains_accomplishments: string;
+  gains_interests: string;
+  gains_networks: string;
+  gains_skills: string;
 }
 
 export interface MemberPhotoFiles {
@@ -82,6 +140,10 @@ export interface MemberPhotoFiles {
   attachmentFile?: File | null;
   /** trueの場合、新しいファイルの指定がなくても既存の添付資料を削除する */
   removeAttachment?: boolean;
+  /** 1to1シート添付ファイル(PDF/画像) */
+  oneToOneAttachmentFile?: File | null;
+  /** trueの場合、新しいファイルの指定がなくても既存の1to1シート添付ファイルを削除する */
+  removeOneToOneAttachment?: boolean;
 }
 
 // v5: フィールド構成変更(QRコード表示用リンク・表示切り替えを追加)に伴いキーを変更し、
@@ -106,8 +168,34 @@ export function sampleAvatarUrl(name: string): string {
   )}&background=${background}&color=ffffff&size=128&bold=true&format=png`;
 }
 
+const NEW_OPTIONAL_FIELD_DEFAULTS = {
+  one_to_one_attachment_url: "",
+  one_to_one_attachment_name: "",
+  one_to_one_sheet_url: "",
+  bio_past_occupation: "",
+  bio_spouse: "",
+  bio_family: "",
+  bio_pet: "",
+  bio_hobby: "",
+  bio_other_interests: "",
+  bio_hometown: "",
+  bio_residence: "",
+  bio_residence_years: "",
+  bio_strong_desire: "",
+  bio_unknown_fact: "",
+  bio_success_key: "",
+  gains_goals: "",
+  gains_accomplishments: "",
+  gains_interests: "",
+  gains_networks: "",
+  gains_skills: "",
+} as const;
+
+type NewOptionalField = keyof typeof NEW_OPTIONAL_FIELD_DEFAULTS;
+
 const DUMMY_SEED_MEMBERS: Array<
-  Omit<Member, "photo_icon_url" | "photo_bust_url" | "sort_order"> & { photoName: string }
+  Omit<Member, "photo_icon_url" | "photo_bust_url" | "sort_order" | NewOptionalField> &
+    Partial<Pick<Member, NewOptionalField>> & { photoName: string }
 > = [
   {
     id: "dummy-1",
@@ -283,6 +371,7 @@ function buildSeedMembers(): Member[] {
   return DUMMY_SEED_MEMBERS.map(({ photoName, ...member }, index) => {
     const avatar = sampleAvatarUrl(photoName);
     return {
+      ...NEW_OPTIONAL_FIELD_DEFAULTS,
       ...member,
       photo_icon_url: avatar,
       photo_bust_url: avatar,
@@ -303,6 +392,26 @@ function normalizeMember(member: Member): Member {
     bronze_referral: member.bronze_referral ?? "",
     attachment_url: member.attachment_url ?? "",
     attachment_name: member.attachment_name ?? "",
+    one_to_one_attachment_url: member.one_to_one_attachment_url ?? "",
+    one_to_one_attachment_name: member.one_to_one_attachment_name ?? "",
+    one_to_one_sheet_url: member.one_to_one_sheet_url ?? "",
+    bio_past_occupation: member.bio_past_occupation ?? "",
+    bio_spouse: member.bio_spouse ?? "",
+    bio_family: member.bio_family ?? "",
+    bio_pet: member.bio_pet ?? "",
+    bio_hobby: member.bio_hobby ?? "",
+    bio_other_interests: member.bio_other_interests ?? "",
+    bio_hometown: member.bio_hometown ?? "",
+    bio_residence: member.bio_residence ?? "",
+    bio_residence_years: member.bio_residence_years ?? "",
+    bio_strong_desire: member.bio_strong_desire ?? "",
+    bio_unknown_fact: member.bio_unknown_fact ?? "",
+    bio_success_key: member.bio_success_key ?? "",
+    gains_goals: member.gains_goals ?? "",
+    gains_accomplishments: member.gains_accomplishments ?? "",
+    gains_interests: member.gains_interests ?? "",
+    gains_networks: member.gains_networks ?? "",
+    gains_skills: member.gains_skills ?? "",
   };
 }
 
@@ -389,6 +498,22 @@ async function resolveAttachment(
   return fallback;
 }
 
+async function resolveOneToOneAttachment(
+  file: File | null | undefined,
+  removeAttachment: boolean | undefined,
+  fallback: { one_to_one_attachment_url: string; one_to_one_attachment_name: string },
+  memberId: string
+): Promise<{ one_to_one_attachment_url: string; one_to_one_attachment_name: string }> {
+  if (file) {
+    const one_to_one_attachment_url = supabase
+      ? await uploadOneToOneAttachment(file, memberId)
+      : await fileToDataUrl(file);
+    return { one_to_one_attachment_url, one_to_one_attachment_name: file.name };
+  }
+  if (removeAttachment) return { one_to_one_attachment_url: "", one_to_one_attachment_name: "" };
+  return fallback;
+}
+
 /**
  * insert/update を実行し、DBにまだ存在しない列が原因でエラーになった場合は
  * その列を除いて自動的に再試行する。既存環境(未マイグレーション)との互換性を保つための処置。
@@ -464,6 +589,12 @@ export async function createMember(
     { attachment_url: "", attachment_name: "" },
     id
   );
+  const { one_to_one_attachment_url, one_to_one_attachment_name } = await resolveOneToOneAttachment(
+    photos.oneToOneAttachmentFile,
+    photos.removeOneToOneAttachment,
+    { one_to_one_attachment_url: "", one_to_one_attachment_name: "" },
+    id
+  );
 
   if (supabase) {
     const data = await insertMemberSafely({
@@ -473,6 +604,8 @@ export async function createMember(
       photo_bust_url,
       attachment_url,
       attachment_name,
+      one_to_one_attachment_url,
+      one_to_one_attachment_name,
       sort_order: Date.now(),
     });
     return normalizeMember(data);
@@ -485,6 +618,8 @@ export async function createMember(
     photo_bust_url,
     attachment_url,
     attachment_name,
+    one_to_one_attachment_url,
+    one_to_one_attachment_name,
     sort_order: Date.now(),
     created_at: new Date().toISOString(),
   };
@@ -507,6 +642,8 @@ export async function updateMember(
     photo_bust_url: string;
     attachment_url: string;
     attachment_name: string;
+    one_to_one_attachment_url: string;
+    one_to_one_attachment_name: string;
   }
 ): Promise<Member> {
   const photo_icon_url = await resolvePhotoUrl(
@@ -527,6 +664,15 @@ export async function updateMember(
     { attachment_url: existing.attachment_url, attachment_name: existing.attachment_name },
     id
   );
+  const { one_to_one_attachment_url, one_to_one_attachment_name } = await resolveOneToOneAttachment(
+    photos.oneToOneAttachmentFile,
+    photos.removeOneToOneAttachment,
+    {
+      one_to_one_attachment_url: existing.one_to_one_attachment_url,
+      one_to_one_attachment_name: existing.one_to_one_attachment_name,
+    },
+    id
+  );
 
   if (supabase) {
     const data = await updateMemberSafely(id, {
@@ -535,6 +681,8 @@ export async function updateMember(
       photo_bust_url,
       attachment_url,
       attachment_name,
+      one_to_one_attachment_url,
+      one_to_one_attachment_name,
     });
     return normalizeMember(data);
   }
@@ -550,6 +698,8 @@ export async function updateMember(
     photo_bust_url,
     attachment_url,
     attachment_name,
+    one_to_one_attachment_url,
+    one_to_one_attachment_name,
   };
   members[index] = updated;
   saveDummyMembers(members);

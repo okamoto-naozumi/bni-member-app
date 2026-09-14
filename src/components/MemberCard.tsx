@@ -1,7 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { Info, Pencil, Trash2 } from "lucide-react";
+import { BookUser, ClipboardList, ExternalLink, FileText, Info, Pencil, Trash2 } from "lucide-react";
 import type { Member } from "@/lib/members";
 import ShareButtons from "@/components/ShareButtons";
+import MemberWorksheetModal from "@/components/MemberWorksheetModal";
 
 export default function MemberCard({
   member,
@@ -17,6 +21,8 @@ export default function MemberCard({
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
+  const [worksheet, setWorksheet] = useState<"bio" | "gains" | null>(null);
+
   return (
     <div className="flex gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
       <div className="flex shrink-0 flex-col items-center gap-1.5">
@@ -65,7 +71,7 @@ export default function MemberCard({
               </p>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             {onDetail && (
               <button
                 type="button"
@@ -96,6 +102,24 @@ export default function MemberCard({
                 削除
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setWorksheet("bio")}
+              title="メンバー略歴シート"
+              className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <BookUser size={12} />
+              略歴
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorksheet("gains")}
+              title="G.A.I.N.S.ワークシート"
+              className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <ClipboardList size={12} />
+              GAINS
+            </button>
           </div>
         </div>
 
@@ -160,10 +184,45 @@ export default function MemberCard({
           </dl>
         )}
 
+        {(member.one_to_one_attachment_url || member.one_to_one_sheet_url) && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {member.one_to_one_attachment_url && (
+              <a
+                href={member.one_to_one_attachment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-950/30 dark:text-sky-400 dark:hover:bg-sky-950/50"
+              >
+                <FileText size={12} />
+                1to1シートPDF
+              </a>
+            )}
+            {member.one_to_one_sheet_url && (
+              <a
+                href={member.one_to_one_sheet_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-950/30 dark:text-sky-400 dark:hover:bg-sky-950/50"
+              >
+                <ExternalLink size={12} />
+                1to1シートURL
+              </a>
+            )}
+          </div>
+        )}
+
         <div className="mt-2">
           <ShareButtons url={`/m/${member.id}`} text={`${member.name}さんのデジタル名刺`} />
         </div>
       </div>
+
+      {worksheet && (
+        <MemberWorksheetModal
+          member={member}
+          kind={worksheet}
+          onClose={() => setWorksheet(null)}
+        />
+      )}
     </div>
   );
 }

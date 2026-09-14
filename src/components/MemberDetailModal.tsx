@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Mail, Phone, Globe, Award, FileText, Download } from "lucide-react";
+import { X, Mail, Phone, Globe, Award, FileText, Download, ExternalLink, BookUser, ClipboardList } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
 import type { Member } from "@/lib/members";
 import { registerPdfFonts } from "@/lib/pdf/fonts";
@@ -10,6 +10,7 @@ import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
 import OneToOneSheetDocument from "@/lib/pdf/OneToOneSheetDocument";
 import { getErrorMessage } from "@/lib/errorMessage";
 import ShareButtons from "@/components/ShareButtons";
+import MemberWorksheetModal from "@/components/MemberWorksheetModal";
 
 export default function MemberDetailModal({
   member,
@@ -20,6 +21,7 @@ export default function MemberDetailModal({
 }) {
   const [generatingSheet, setGeneratingSheet] = useState(false);
   const [sheetError, setSheetError] = useState<string | null>(null);
+  const [worksheet, setWorksheet] = useState<"bio" | "gains" | null>(null);
 
   async function handleDownloadOneToOneSheet() {
     setGeneratingSheet(true);
@@ -67,7 +69,7 @@ export default function MemberDetailModal({
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             メンバー詳細
           </h2>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             <button
               type="button"
               onClick={handleDownloadOneToOneSheet}
@@ -76,6 +78,22 @@ export default function MemberDetailModal({
             >
               <Download size={12} />
               {generatingSheet ? "生成中..." : "1to1シート出力"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorksheet("bio")}
+              className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <BookUser size={12} />
+              略歴シート
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorksheet("gains")}
+              className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <ClipboardList size={12} />
+              GAINSシート
             </button>
             <button
               type="button"
@@ -198,10 +216,47 @@ export default function MemberDetailModal({
 
         {member.comment && (
           <div className="mt-4">
-            <p className="mb-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">コメント</p>
+            <p className="mb-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">紹介文</p>
             <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
               {member.comment}
             </p>
+          </div>
+        )}
+
+        {(member.one_to_one_attachment_url || member.one_to_one_sheet_url) && (
+          <div className="mt-4">
+            <p className="mb-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              1to1シート
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {member.one_to_one_attachment_url && (
+                <a
+                  href={member.one_to_one_attachment_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-full bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
+                >
+                  <FileText size={16} />
+                  PDFを開く/ダウンロード
+                  {member.one_to_one_attachment_name && (
+                    <span className="truncate text-xs opacity-70">
+                      ({member.one_to_one_attachment_name})
+                    </span>
+                  )}
+                </a>
+              )}
+              {member.one_to_one_sheet_url && (
+                <a
+                  href={member.one_to_one_sheet_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  <ExternalLink size={16} />
+                  外部URLを別タブで開く
+                </a>
+              )}
+            </div>
           </div>
         )}
 
@@ -238,6 +293,16 @@ export default function MemberDetailModal({
           </dl>
         )}
       </div>
+
+      {worksheet && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <MemberWorksheetModal
+            member={member}
+            kind={worksheet}
+            onClose={() => setWorksheet(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

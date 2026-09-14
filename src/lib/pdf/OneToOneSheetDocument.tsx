@@ -246,7 +246,7 @@ export default function OneToOneSheetDocument({
 
         {member.comment ? (
           <>
-            <Text style={styles.sectionTitle}>事業内容・コメント</Text>
+            <Text style={styles.sectionTitle}>事業内容・紹介文</Text>
             <Text style={styles.bodyText}>{member.comment}</Text>
           </>
         ) : null}

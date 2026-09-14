@@ -15,6 +15,7 @@ import {
   Library,
   Info,
 } from "lucide-react";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 
 const NAV_ITEMS = [
   { href: "/members", label: "メンバー登録", icon: Users },
@@ -58,6 +59,9 @@ export default function NavHeader() {
             );
           })}
         </nav>
+        <div className="ml-auto shrink-0">
+          <ThemeSwitcher />
+        </div>
       </div>
     </header>
   );

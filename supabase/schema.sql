@@ -36,6 +36,26 @@ alter table public.members add column if not exists silver_referral text;
 alter table public.members add column if not exists bronze_referral text;
 alter table public.members add column if not exists attachment_url text;
 alter table public.members add column if not exists attachment_name text;
+alter table public.members add column if not exists one_to_one_attachment_url text;
+alter table public.members add column if not exists one_to_one_attachment_name text;
+alter table public.members add column if not exists one_to_one_sheet_url text;
+alter table public.members add column if not exists bio_past_occupation text;
+alter table public.members add column if not exists bio_spouse text;
+alter table public.members add column if not exists bio_family text;
+alter table public.members add column if not exists bio_pet text;
+alter table public.members add column if not exists bio_hobby text;
+alter table public.members add column if not exists bio_other_interests text;
+alter table public.members add column if not exists bio_hometown text;
+alter table public.members add column if not exists bio_residence text;
+alter table public.members add column if not exists bio_residence_years text;
+alter table public.members add column if not exists bio_strong_desire text;
+alter table public.members add column if not exists bio_unknown_fact text;
+alter table public.members add column if not exists bio_success_key text;
+alter table public.members add column if not exists gains_goals text;
+alter table public.members add column if not exists gains_accomplishments text;
+alter table public.members add column if not exists gains_interests text;
+alter table public.members add column if not exists gains_networks text;
+alter table public.members add column if not exists gains_skills text;
 
 alter table public.members enable row level security;
 

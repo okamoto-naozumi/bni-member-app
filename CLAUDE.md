@@ -112,9 +112,15 @@ export async function fetchX(): Promise<X[]> {
 
 ### `members`(メンバー名簿の本体)
 
-主なカラム: `id`(uuid, PK) `chapter` `role`(役職) `name` `name_kana` `company` `category`(業種) `team`(委員会) `wanted_referral`(欲しいリファーラル) `gold_referral` `silver_referral` `bronze_referral`(金銀銅のリファーラル) `comment` `contact`(電話) `email` `hp_url` `photo_icon_url`(アイコン用、正方形/円形) `photo_bust_url`(PDF名簿用バストアップ) `custom_fields`(jsonb配列、`{key, value}[]`) `sort_order`(手動並べ替え) `digital_card_url` `line_url` `instagram_url` `facebook_url`(デジタル名刺ページのリンク集) `show_qr_code`(boolean、デジタル名刺QR表示のON/OFF) `attachment_url` `attachment_name`(添付資料PDF等) `created_at`
+主なカラム: `id`(uuid, PK) `chapter` `role`(役職) `name` `name_kana` `company` `category`(業種) `team`(委員会) `wanted_referral`(欲しいリファーラル) `gold_referral` `silver_referral` `bronze_referral`(金銀銅のリファーラル) `comment`(UI表記は「紹介文」。DBカラム名は既存互換のため`comment`のまま変更していない) `contact`(電話) `email` `hp_url` `photo_icon_url`(アイコン用、正方形/円形) `photo_bust_url`(PDF名簿用バストアップ) `custom_fields`(jsonb配列、`{key, value}[]`) `sort_order`(手動並べ替え) `digital_card_url` `line_url` `instagram_url` `facebook_url`(デジタル名刺ページのリンク集) `show_qr_code`(boolean、デジタル名刺QR表示のON/OFF) `attachment_url` `attachment_name`(汎用の添付資料PDF等) `created_at`
 
-型定義は `src/lib/members.ts` の `Member` / `MemberInput`。**要件文書などでカラム名として `chapter_name` `position` `phone` `website_url` `desired_referrals` のような別名が出てきても、既存のDBカラム名(`chapter` `role` `contact` `hp_url` `wanted_referral`)を優先しリネームしない**(過去の指示で明示的にこの方針を採用済み。互換性維持のため)。
+**1to1シート用フィールド**(汎用の`attachment_url`/`attachment_name`とは別物): `one_to_one_attachment_url` `one_to_one_attachment_name`(1to1シートのPDF/画像ファイル添付。アップロード先は`member-attachments`バケット、`src/lib/memberAttachments.ts`の`uploadOneToOneAttachment`がファイル名に`one-to-one-`プレフィックスを付けて同バケット内で汎用添付と共存させる) `one_to_one_sheet_url`(1to1シートの外部共有URL、Googleドライブ等)。メンバーカード・詳細モーダルでは両方が登録されていれば両方のボタン(PDFを開く/ダウンロード、外部URLを別タブで開く)を表示する。
+
+**メンバー略歴シート用フィールド**(すべてtext、空文字許容): `bio_past_occupation`(過去に経験した職業) `bio_spouse`(配偶者) `bio_family`(家族) `bio_pet`(ペット) `bio_hobby`(趣味) `bio_other_interests`(その他の関心事) `bio_hometown`(出身地) `bio_residence`(居住地) `bio_residence_years`(居住年数) `bio_strong_desire`(私の強い願望は) `bio_unknown_fact`(誰も知らない私) `bio_success_key`(私の成功の鍵は)
+
+**G.A.I.N.S.ワークシート用フィールド**(すべてtext): `gains_goals`(Goals/目標) `gains_accomplishments`(Accomplishments/実績) `gains_interests`(Interests/興味) `gains_networks`(Networks/人脈) `gains_skills`(Skills/スキル)
+
+型定義は `src/lib/members.ts` の `Member` / `MemberInput`。**要件文書などでカラム名として `chapter_name` `position` `phone` `website_url` `desired_referrals` のような別名が出てきても、既存のDBカラム名(`chapter` `role` `contact` `hp_url` `wanted_referral`)を優先しリネームしない**(過去の指示で明示的にこの方針を採用済み。互換性維持のため)。同様に、UI表記を「コメント」から「紹介文」に変更した際もDBカラム名`comment`は変更していない。
 
 ### `teams`(チーム/委員会マスタ)
 
@@ -122,7 +128,9 @@ export async function fetchX(): Promise<X[]> {
 
 ### `presentations`(メインプレゼンター・ウィークリーカレンダー)
 
-`id`(uuid, PK) `presentation_date`(date, ⚠️本番DBでは `present_date` の場合あり→上記フォールバック参照) `member_id`(uuid, `members.id` へのFK, on delete set null) `theme`(プレゼンテーマ) `material_url` `material_name`(資料PDF/PPT等) `created_at`
+`id`(uuid, PK) `presentation_date`(date, ⚠️本番DBでは `present_date` の場合あり→上記フォールバック参照) `member_id`(uuid, `members.id` へのFK, on delete set null) `theme`(プレゼンテーマ) `material_url`(プレゼン資料の外部共有URL。Googleドライブ等) `material_name`(資料名、任意の表示ラベル) `created_at`
+
+**プレゼン資料はファイルアップロードではなくURL入力方式**(`PresentationForm.tsx`)。以前はSupabase Storage(`presentation-materials`バケット)へのファイルアップロードに対応していたが、Googleドライブ等の外部共有URLをそのまま登録する方式に変更した。閲覧側(`/presenters`)は`material_url`を新しいタブで開くリンクを表示するのみで、アップロード処理は行わない。`presentation-materials`バケット自体はスキーマ上残しているが(過去にアップロードされたデータの後方互換のため)、新規のアップロードコードパスは削除済み(`src/lib/presentationMaterials.ts`は削除した)。
 
 型定義は `src/lib/presentations.ts` の `Presentation` / `PresentationInput`。
 
@@ -191,15 +199,24 @@ export async function fetchX(): Promise<X[]> {
 
 全バケット共通: 読み取りは誰でも可、書き込み(insert/update/delete)は `authenticated` ロールのみ。
 
+## 背景テーマ切替機能(設計判断)
+
+`src/lib/theme.ts` `src/components/ThemeScript.tsx` `src/components/ThemeSwitcher.tsx` で構成する。ヘッダー右上のパレットアイコン(`NavHeader.tsx`)から「システムに合わせる/ライト/ダーク/ウォーム/オーシャン」を選択できる。
+
+- **保存先はlocalStorageのみ**(キー: `bni-theme-preference`)。このアプリにはログイン/アカウントの概念がないため(`members`は名簿データであり認証システムではない)、「アカウント毎」ではなく「ブラウザ(端末)毎」の永続化とすることをユーザーに確認済み。別ブラウザ・別端末では引き継がれない。
+- **`dark:` ユーティリティの発火条件を変更した**: 従来はTailwindの既定動作でOSの`prefers-color-scheme: dark`にのみ連動していたが、`globals.css`で `@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));` を宣言し、`<html>`要素の`data-theme="dark"`属性に連動するよう変更した。これにより「システムに合わせる」以外を明示的に選んだ場合にOS設定を上書きできる。既存コンポーネントの`dark:bg-zinc-950`のような大量のクラスはそのまま再利用され、影響を受けるのは発火条件(トリガー)だけ。
+- **FOUC対策**: `ThemeScript.tsx`が`next/script`の`strategy="beforeInteractive"`でheadに同期スクリプトを注入し、hydration前に`localStorage`の設定(または未設定時はOSの設定)から解決した具体的なテーマ(`light`/`dark`/`warm`/`ocean`のいずれか。`system`という値がそのまま属性値になることはない)を`data-theme`属性にセットする。
+- **「背景設定」というスコープを意図的に守っている**: 要件は「背景設定」であり、カード等の個別コンポーネントを含むフルリスキンではない。`warm`/`ocean`は`globals.css`で`--background`/`--foreground`を上書きし、`body`(`bg-background text-foreground`)の背景色・文字色のみを変える。ヘッダーやカードの`bg-white`等の個別クラスはこれらのテーマでは変化しない(`dark`テーマ選択時のみ、既存の`dark:`クラス群が有効になり全面的に暗色になる)。新しいテーマを追加する場合は`src/lib/theme.ts`の`THEME_OPTIONS`と`globals.css`の`[data-theme="..."]`ブロックに追記するだけでよい。
+
 ## 実装済み機能
 
-- **メンバー管理**(`/members`): 一覧(カード表示/サークルマップ表示の切り替え、並び替え: 登録日順/五十音順/チーム順/手動ドラッグ&ドロップ)、追加・編集フォーム、詳細モーダル(全項目表示、金銀銅リファーラルは色付きバッジ)、顔写真の真下にQRコード画像を常時直接表示(スキャン可能なPNG、`show_qr_code` ON時のみ)、1to1プロファイルシートPDF出力(詳細モーダルから)、全メンバーリストA4 PDF出力ボタン(ヘッダー、`MemberListDocument` を再利用)
+- **メンバー管理**(`/members`): 一覧(カード表示/サークルマップ表示の切り替え、並び替え: 登録日順/五十音順/チーム順/手動ドラッグ&ドロップ)、追加・編集フォーム(基本情報/メンバー略歴/G.A.I.N.S.のタブ切り替え)、詳細モーダル(全項目表示、金銀銅リファーラルは色付きバッジ、「紹介文」表記)、顔写真の真下にQRコード画像を常時直接表示(スキャン可能なPNG、`show_qr_code` ON時のみ)、1to1プロファイルシートPDF自動生成出力(詳細モーダルから)、1to1シートのPDF/画像添付・外部URL登録(両方登録可、カード・詳細モーダルの両方から開く)、メンバー略歴シート/G.A.I.N.S.ワークシートのプレビューモーダル+PDF出力ボタン(カード・詳細モーダルの両方に配置、`MemberWorksheetModal` が`BioSheetDocument`/`GainsWorksheetDocument`を切り替えて生成)、全メンバーリストA4 PDF出力ボタン(ヘッダー、`MemberListDocument` を再利用)
   - **サークルマップ表示**: `src/lib/memberPowerTeams.ts` の対応表でメンバーをパワーチーム別にグループ化し、各チームの所属人数・所属メンバー・空きカテゴリー(「募集中」)を可視化する(`src/components/PowerTeamCircleMap.tsx`)。`/matrix` のコンタクトサークルマップとは別軸の分類(業種カテゴリ→パワーチーム)である点に注意。
   - **検索・タグフィルター**: 氏名/フリガナ/会社名のテキスト検索に加え、「欲しいリファーラルあり」「金/銀/銅バッジ」「パワーチーム」タグをワンタップでON/OFFできる絞り込みバー。カード表示・サークルマップ表示の両方に適用される。
 - **グループ編成**(`/groups`): メンバーをドラッグ&ドロップで複数グループに割り当て、パターン(編成案)として複数保存・複製、代理参加者バッジの追加
 - **コンタクトサークルマップ**(`/matrix`): 業種カテゴリをコンタクトサークル(建築/美容健康/経営者サポート/不動産資産/ITクリエイティブ/その他)ごとに分類し、空席カテゴリを「絶賛募集中」で可視化
 - **PDF出力**(`/pdf`): メンバーリストPDF(QRコード付き)、グループ配置PDF。プレビュー付きダウンロード
-- **メインプレゼンター管理**(`/presenters`): リスト表示(今後の予定/過去の実績)とカレンダー表示(月グリッド)の切り替え、プレゼン資料アップロード、次回プレゼンターのカウントダウンリマインドバナー(`/presenters` と `/members` の画面上部に表示)
+- **メインプレゼンター管理**(`/presenters`): リスト表示(今後の予定/過去の実績)とカレンダー表示(月グリッド)の切り替え、プレゼン資料は外部共有URL(Googleドライブ等)を登録する方式(ファイルアップロードは廃止)、閲覧時はボタンクリックで別タブに開く、次回プレゼンターのカウントダウンリマインドバナー(`/presenters` と `/members` の画面上部に表示)
 - **リファーラル募集掲示板**(`/referrals`): ステータス別フィルタ(全て/募集中/調整中/充足)、カテゴリ色分けバッジ、パワーチームタグ、紹介窓口メンバー表示、カード表示/リスト表示の切り替え(リスト表示は横長テーブルで募集カテゴリ・対象パワーチーム・詳細説明・紹介窓口・ステータス・操作を1行にまとめ、多件の比較を容易にする。`overflow-x-auto` でモバイルでも崩れないようにしている)
 - **カレンダー**(`/calendar`): 月/週/日ビュー切り替え、`categories` テーブルから動的生成されるカテゴリタブでの絞り込み、当日セルのハイライト、予定クリックでの詳細表示・編集モーダル、終了日時未入力時の自動補完(開始日時を適用)、14列CSVインポート/エクスポート(カテゴリ名の名寄せ自動作成込み)
 - **1to1実施マトリクス**(`/one-on-ones`): メンバー×メンバーの対戦表UI。セルをクリックすると `OneOnOneForm` モーダルで実施日・メモを記録(1ペア1レコード、`upsertOneOnOne` が更新/新規作成を自動判定)。未実施ペアは amber、実施済みペアは emerald でハイライトし、上部に実施率(実施ペア数 / 全ペア数)を表示する。
@@ -208,6 +225,7 @@ export async function fetchX(): Promise<X[]> {
 - **LINE / SNS共有ボタン**(`src/components/ShareButtons.tsx`): 「LINEで共有」(LINE公式のメッセージ共有URLを新規タブで開く)と「URLをコピー」(`navigator.clipboard`)の2ボタンをまとめたコンポーネント。`url` に `/` 始まりの相対パスを渡すとクリック時に `window.location.origin` を付与して絶対URL化する。メンバーカード(デジタル名刺URL)、1to1シートモーダル(同URL)、メインプレゼンター一覧のプレゼン資料リンク、リファーラル掲示板のカード(`/referrals` への案内文付きリンク)に組み込み済み。新しい箇所に追加する場合もこのコンポーネントを再利用すること。
 - **アバウト・利用ガイド**(`/about`): 全機能(メンバー管理/1to1シートPDF/メインプレゼンターカレンダー/リファーラル掲示板/資料ライブラリ)の目的・使い方を紹介する静的な説明ページ。レスポンシブ・ライト/ダーク対応
 - **チーム管理**(`/settings/teams`): 委員会の追加・編集・削除
+- **背景テーマ切替**(ヘッダー右上): システムに合わせる/ライト/ダーク/ウォーム/オーシャンの5種類。詳細は「背景テーマ切替機能(設計判断)」の節を参照。
 
 ## 開発上の注意点
 
@@ -221,6 +239,7 @@ export async function fetchX(): Promise<X[]> {
 
 ## 開発経緯(主なコミット、直近が上)
 
+1. `Add bio sheet, GAINS worksheet, 1to1 URL support, custom background themes, and presentation URL linkage with CLAUDE.md update` — メンバー略歴シート/G.A.I.N.S.ワークシートの入力タブ・プレビュー・PDF出力、1to1シートのPDF添付+外部URLのデュアル対応、「コメント」→「紹介文」表記変更、プレゼン資料のURL入力方式への変更、背景テーマ切替機能(ライト/ダーク/ウォーム/オーシャン)を追加
 1. `Implement circle map, tag filters, full PDF list, 1to1 matrix, SNS sharing, and visitor tracker with CLAUDE.md update` — パワーチーム別サークルマップ・タグ検索、LINE/SNS共有ボタン、全メンバーリストPDF出力ボタン、1to1実施マトリクス(`/one-on-ones`)、ビジター招待・追跡ボード(`/visitors`)の6機能を追加
 2. `Add list view layout toggle and fix power_team fallback in referral board with CLAUDE.md update` — リファーラル掲示板にカード/リスト表示切り替え追加、power_team/teamカラム名フォールバックとlocalStorageフォールバック対応
 3. `Add /calendar with dynamic category filtering, CSV import/export, and CLAUDE.md update` — カレンダー機能(月/週/日ビュー、動的カテゴリフィルタ、CSVインポート/エクスポート)追加

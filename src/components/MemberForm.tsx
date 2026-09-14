@@ -45,7 +45,76 @@ const EMPTY_INPUT: MemberInput = {
   instagram_url: "",
   facebook_url: "",
   show_qr_code: false,
+  one_to_one_sheet_url: "",
+  bio_past_occupation: "",
+  bio_spouse: "",
+  bio_family: "",
+  bio_pet: "",
+  bio_hobby: "",
+  bio_other_interests: "",
+  bio_hometown: "",
+  bio_residence: "",
+  bio_residence_years: "",
+  bio_strong_desire: "",
+  bio_unknown_fact: "",
+  bio_success_key: "",
+  gains_goals: "",
+  gains_accomplishments: "",
+  gains_interests: "",
+  gains_networks: "",
+  gains_skills: "",
 };
+
+const FORM_TABS = [
+  { key: "basic", label: "基本情報" },
+  { key: "bio", label: "メンバー略歴" },
+  { key: "gains", label: "G.A.I.N.S." },
+] as const;
+type FormTab = (typeof FORM_TABS)[number]["key"];
+
+type BioFieldKey =
+  | "bio_past_occupation"
+  | "bio_spouse"
+  | "bio_family"
+  | "bio_pet"
+  | "bio_hobby"
+  | "bio_other_interests"
+  | "bio_hometown"
+  | "bio_residence"
+  | "bio_residence_years"
+  | "bio_strong_desire"
+  | "bio_unknown_fact"
+  | "bio_success_key";
+
+type GainsFieldKey =
+  | "gains_goals"
+  | "gains_accomplishments"
+  | "gains_interests"
+  | "gains_networks"
+  | "gains_skills";
+
+const BIO_FIELDS: Array<{ key: BioFieldKey; label: string }> = [
+  { key: "bio_past_occupation", label: "過去に経験した職業" },
+  { key: "bio_spouse", label: "配偶者" },
+  { key: "bio_family", label: "家族" },
+  { key: "bio_pet", label: "ペット" },
+  { key: "bio_hobby", label: "趣味" },
+  { key: "bio_other_interests", label: "その他の関心事" },
+  { key: "bio_hometown", label: "出身地" },
+  { key: "bio_residence", label: "居住地" },
+  { key: "bio_residence_years", label: "居住年数" },
+  { key: "bio_strong_desire", label: "私の強い願望は" },
+  { key: "bio_unknown_fact", label: "誰も知らない私" },
+  { key: "bio_success_key", label: "私の成功の鍵は" },
+];
+
+const GAINS_FIELDS: Array<{ key: GainsFieldKey; label: string; sub: string }> = [
+  { key: "gains_goals", label: "Goals", sub: "目標" },
+  { key: "gains_accomplishments", label: "Accomplishments", sub: "実績" },
+  { key: "gains_interests", label: "Interests", sub: "興味" },
+  { key: "gains_networks", label: "Networks", sub: "人脈" },
+  { key: "gains_skills", label: "Skills", sub: "スキル" },
+];
 
 type CropTarget = "icon" | "bust" | null;
 
@@ -82,9 +151,28 @@ export default function MemberForm({
           instagram_url: initial.instagram_url,
           facebook_url: initial.facebook_url,
           show_qr_code: initial.show_qr_code,
+          one_to_one_sheet_url: initial.one_to_one_sheet_url,
+          bio_past_occupation: initial.bio_past_occupation,
+          bio_spouse: initial.bio_spouse,
+          bio_family: initial.bio_family,
+          bio_pet: initial.bio_pet,
+          bio_hobby: initial.bio_hobby,
+          bio_other_interests: initial.bio_other_interests,
+          bio_hometown: initial.bio_hometown,
+          bio_residence: initial.bio_residence,
+          bio_residence_years: initial.bio_residence_years,
+          bio_strong_desire: initial.bio_strong_desire,
+          bio_unknown_fact: initial.bio_unknown_fact,
+          bio_success_key: initial.bio_success_key,
+          gains_goals: initial.gains_goals,
+          gains_accomplishments: initial.gains_accomplishments,
+          gains_interests: initial.gains_interests,
+          gains_networks: initial.gains_networks,
+          gains_skills: initial.gains_skills,
         }
       : EMPTY_INPUT
   );
+  const [formTab, setFormTab] = useState<FormTab>("basic");
   const [teams, setTeams] = useState<Team[]>([]);
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconPreview, setIconPreview] = useState<string | null>(
@@ -99,11 +187,19 @@ export default function MemberForm({
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState<string>(initial?.attachment_url || "");
   const [attachmentName, setAttachmentName] = useState<string>(initial?.attachment_name || "");
+  const [oneToOneAttachmentFile, setOneToOneAttachmentFile] = useState<File | null>(null);
+  const [oneToOneAttachmentUrl, setOneToOneAttachmentUrl] = useState<string>(
+    initial?.one_to_one_attachment_url || ""
+  );
+  const [oneToOneAttachmentName, setOneToOneAttachmentName] = useState<string>(
+    initial?.one_to_one_attachment_name || ""
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
   const bustInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const oneToOneAttachmentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchTeams().then(setTeams);
@@ -161,6 +257,19 @@ export default function MemberForm({
     if (attachmentInputRef.current) attachmentInputRef.current.value = "";
   }
 
+  function handleOneToOneAttachmentSelect(file: File | null) {
+    if (!file) return;
+    setOneToOneAttachmentFile(file);
+    setOneToOneAttachmentName(file.name);
+  }
+
+  function removeOneToOneAttachment() {
+    setOneToOneAttachmentFile(null);
+    setOneToOneAttachmentUrl("");
+    setOneToOneAttachmentName("");
+    if (oneToOneAttachmentInputRef.current) oneToOneAttachmentInputRef.current.value = "";
+  }
+
   function addCustomField() {
     setInput((prev) => ({
       ...prev,
@@ -200,20 +309,33 @@ export default function MemberForm({
 
       const shouldRemoveAttachment =
         !attachmentFile && !attachmentUrl && Boolean(initial?.attachment_url);
+      const shouldRemoveOneToOneAttachment =
+        !oneToOneAttachmentFile &&
+        !oneToOneAttachmentUrl &&
+        Boolean(initial?.one_to_one_attachment_url);
 
       const member = initial
         ? await updateMember(
             initial.id,
             payload,
-            { iconFile, bustFile, attachmentFile, removeAttachment: shouldRemoveAttachment },
+            {
+              iconFile,
+              bustFile,
+              attachmentFile,
+              removeAttachment: shouldRemoveAttachment,
+              oneToOneAttachmentFile,
+              removeOneToOneAttachment: shouldRemoveOneToOneAttachment,
+            },
             {
               photo_icon_url: initial.photo_icon_url,
               photo_bust_url: initial.photo_bust_url,
               attachment_url: initial.attachment_url,
               attachment_name: initial.attachment_name,
+              one_to_one_attachment_url: initial.one_to_one_attachment_url,
+              one_to_one_attachment_name: initial.one_to_one_attachment_name,
             }
           )
-        : await createMember(payload, { iconFile, bustFile, attachmentFile });
+        : await createMember(payload, { iconFile, bustFile, attachmentFile, oneToOneAttachmentFile });
 
       onSaved(member);
       if (!initial) {
@@ -226,6 +348,11 @@ export default function MemberForm({
         setAttachmentUrl("");
         setAttachmentName("");
         if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+        setOneToOneAttachmentFile(null);
+        setOneToOneAttachmentUrl("");
+        setOneToOneAttachmentName("");
+        if (oneToOneAttachmentInputRef.current) oneToOneAttachmentInputRef.current.value = "";
+        setFormTab("basic");
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -240,6 +367,24 @@ export default function MemberForm({
         onSubmit={handleSubmit}
         className="flex flex-col gap-5 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
       >
+        <div className="flex w-fit items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
+          {FORM_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setFormTab(t.key)}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                formTab === t.key
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className={`flex flex-col gap-5 ${formTab === "basic" ? "" : "hidden"}`}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <PhotoPicker
             label="パターン1: アイコン/グループ編成用"
@@ -410,12 +555,12 @@ export default function MemberForm({
           </Field>
         </div>
 
-        <Field label="コメント">
+        <Field label="紹介文">
           <textarea
             value={input.comment}
             onChange={(e) => setInput({ ...input, comment: e.target.value })}
             className="input min-h-20 resize-y"
-            placeholder="事業内容やひとことコメントを入力してください"
+            placeholder="事業内容やひとこと紹介文を入力してください"
           />
         </Field>
 
@@ -468,6 +613,67 @@ export default function MemberForm({
             <Paperclip size={12} />
             会社案内やサービス資料などのPDFファイル等をアップロードできます。
           </p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <span className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            1to1シート
+          </span>
+          <p className="mb-2 text-xs text-zinc-500">
+            1to1シートはPDF/画像ファイルの添付、または外部URL(Googleドライブ等)のどちらか一方、もしくは両方を登録できます。
+          </p>
+
+          {oneToOneAttachmentUrl && !oneToOneAttachmentFile ? (
+            <div className="flex items-center gap-2 text-sm">
+              <FileText size={16} className="shrink-0 text-zinc-400" />
+              <a
+                href={oneToOneAttachmentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate text-sky-600 underline dark:text-sky-400"
+              >
+                {oneToOneAttachmentName || "登録済みの1to1シートを開く"}
+              </a>
+              <button
+                type="button"
+                onClick={removeOneToOneAttachment}
+                className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+                aria-label="1to1シート添付ファイルを削除"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm">
+              <input
+                ref={oneToOneAttachmentInputRef}
+                type="file"
+                accept=".pdf,image/*,application/pdf"
+                onChange={(e) => handleOneToOneAttachmentSelect(e.target.files?.[0] ?? null)}
+                className="block w-full text-xs text-zinc-500 file:mr-2 file:rounded-full file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white dark:file:bg-zinc-100 dark:file:text-black"
+              />
+              {oneToOneAttachmentFile && (
+                <button
+                  type="button"
+                  onClick={removeOneToOneAttachment}
+                  className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+                  aria-label="選択したファイルを取り消す"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          )}
+
+          <Field label="1to1シートURL(Googleドライブ等)">
+            <input
+              type="url"
+              value={input.one_to_one_sheet_url}
+              onChange={(e) => setInput({ ...input, one_to_one_sheet_url: e.target.value })}
+              className="input mt-2"
+              placeholder="https://drive.google.com/..."
+            />
+          </Field>
         </div>
 
         <div>
@@ -584,6 +790,39 @@ export default function MemberForm({
           <p className="mt-2 text-xs text-zinc-500">
             QRコードは、これらのリンクをまとめたデジタル名刺ページ(/m/{"{id}"})を開くQRコードとして自動生成されます。
           </p>
+        </div>
+        </div>
+
+        <div className={`flex flex-col gap-4 ${formTab === "bio" ? "" : "hidden"}`}>
+          <p className="text-xs text-zinc-500">
+            メンバー略歴シートに掲載する項目です。空欄のまま保存すると、その項目はシートに表示されません。
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {BIO_FIELDS.map((f) => (
+              <Field key={f.key} label={f.label}>
+                <input
+                  value={input[f.key]}
+                  onChange={(e) => setInput({ ...input, [f.key]: e.target.value })}
+                  className="input"
+                />
+              </Field>
+            ))}
+          </div>
+        </div>
+
+        <div className={`flex flex-col gap-4 ${formTab === "gains" ? "" : "hidden"}`}>
+          <p className="text-xs text-zinc-500">
+            G.A.I.N.S.ワークシートに掲載する項目です。空欄のまま保存すると、その項目はシートに表示されません。
+          </p>
+          {GAINS_FIELDS.map((f) => (
+            <Field key={f.key} label={`${f.label}(${f.sub})`}>
+              <textarea
+                value={input[f.key]}
+                onChange={(e) => setInput({ ...input, [f.key]: e.target.value })}
+                className="input min-h-16 resize-y"
+              />
+            </Field>
+          ))}
         </div>
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

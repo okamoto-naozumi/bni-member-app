@@ -1,6 +1,4 @@
 import { supabase } from "@/lib/supabase";
-import { uploadPresentationMaterial } from "@/lib/presentationMaterials";
-import { fileToDataUrl } from "@/lib/fileToDataUrl";
 import { extractMissingColumn } from "@/lib/postgrestError";
 
 export interface Presentation {
@@ -10,7 +8,9 @@ export interface Presentation {
   /** 担当メンバーID。未割り当ての場合はnull */
   member_id: string | null;
   theme: string;
+  /** プレゼン資料の外部共有URL(Googleドライブ等) */
   material_url: string;
+  /** 資料名(任意、表示ラベル用) */
   material_name: string;
   created_at: string;
 }
@@ -19,11 +19,8 @@ export interface PresentationInput {
   presentation_date: string;
   member_id: string | null;
   theme: string;
-}
-
-export interface PresentationMaterialFile {
-  file?: File | null;
-  removeMaterial?: boolean;
+  material_url: string;
+  material_name: string;
 }
 
 const DUMMY_STORAGE_KEY = "bni-dummy-presentations-v1";
@@ -170,37 +167,12 @@ export async function fetchPresentations(): Promise<Presentation[]> {
   );
 }
 
-async function resolveMaterial(
-  file: File | null | undefined,
-  removeMaterial: boolean | undefined,
-  fallback: { material_url: string; material_name: string },
-  presentationId: string
-): Promise<{ material_url: string; material_name: string }> {
-  if (file) {
-    const material_url = supabase
-      ? await uploadPresentationMaterial(file, presentationId)
-      : await fileToDataUrl(file);
-    return { material_url, material_name: file.name };
-  }
-  if (removeMaterial) return { material_url: "", material_name: "" };
-  return fallback;
-}
-
-export async function createPresentation(
-  input: PresentationInput,
-  materialFile: PresentationMaterialFile = {}
-): Promise<Presentation> {
+export async function createPresentation(input: PresentationInput): Promise<Presentation> {
   const id = crypto.randomUUID();
-  const { material_url, material_name } = await resolveMaterial(
-    materialFile.file,
-    materialFile.removeMaterial,
-    { material_url: "", material_name: "" },
-    id
-  );
 
   if (supabase) {
     const client = supabase;
-    const { member_id, theme } = input;
+    const { member_id, theme, material_url, material_name } = input;
     const { data, column } = await withDateColumnFallback<Record<string, unknown>>((col) =>
       client
         .from("presentations")
@@ -214,8 +186,6 @@ export async function createPresentation(
   const presentation: Presentation = {
     id,
     ...input,
-    material_url,
-    material_name,
     created_at: new Date().toISOString(),
   };
   const presentations = loadDummyPresentations();
@@ -226,20 +196,11 @@ export async function createPresentation(
 
 export async function updatePresentation(
   id: string,
-  input: PresentationInput,
-  materialFile: PresentationMaterialFile,
-  existing: { material_url: string; material_name: string }
+  input: PresentationInput
 ): Promise<Presentation> {
-  const { material_url, material_name } = await resolveMaterial(
-    materialFile.file,
-    materialFile.removeMaterial,
-    existing,
-    id
-  );
-
   if (supabase) {
     const client = supabase;
-    const { member_id, theme } = input;
+    const { member_id, theme, material_url, material_name } = input;
     const { data, column } = await withDateColumnFallback<Record<string, unknown>>((col) =>
       client
         .from("presentations")
@@ -257,8 +218,6 @@ export async function updatePresentation(
   const updated: Presentation = {
     ...presentations[index],
     ...input,
-    material_url,
-    material_name,
   };
   presentations[index] = updated;
   saveDummyPresentations(presentations);
