@@ -50,6 +50,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
   - `/about` — アバウト・利用ガイド(全機能の概要と使い方を説明する静的ページ)
   - `/settings/teams` — チーム(委員会)マスタ管理
   - `/m/[id]` — メンバー個人のデジタル名刺ページ(QRコードの遷移先、`show_qr_code` がtrueの場合のみQR表示)
+  - `/visitor-generator` — ビジター招待文・お礼状ジェネレーター(LINE/メール/SNS/お礼状の4種テンプレートをテンプレートロジックで自動生成、コピーボタン付き。DB非依存)
+  - `/portfolio` — 商品・事例ポートフォリオギャラリー(メンバー別フィルター、拡大モーダル表示)
+  - `/activity` — 活動タイムライン(メンバー登録・更新、リファーラル追加、1to1実施、ビジター追加の操作履歴を時系列カード表示)
+  - `/admin` — 全データバックアップ(JSONエクスポート)・復元(リストア)
 - `src/components/` — UIコンポーネント。ページ直下のものはトップレベル、グループ編成専用は `groups/` サブディレクトリ
 - `src/lib/` — データアクセス層・ドメインロジック。**Supabase設定時はDB、未設定時はlocalStorage** に読み書きする関数群(下記参照)
 - `src/lib/pdf/` — `@react-pdf/renderer` のDocumentコンポーネント群とフォント登録・画像解決ヘルパー
@@ -57,7 +61,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 ## データアクセス層の設計パターン(重要・踏襲すること)
 
-`src/lib/members.ts` `presentations.ts` `referralRequests.ts` `teams.ts` `events.ts` `eventCategories.ts` `oneOnOnes.ts` `visitorInvites.ts` は全て同じ形:
+`src/lib/members.ts` `presentations.ts` `referralRequests.ts` `teams.ts` `events.ts` `eventCategories.ts` `oneOnOnes.ts` `visitorInvites.ts` `libraryLinks.ts` `libraryCategories.ts` `portfolios.ts` `activityLogs.ts` は全て同じ形:
 
 ```ts
 export async function fetchX(): Promise<X[]> {
@@ -87,13 +91,16 @@ export async function fetchX(): Promise<X[]> {
 2. **カラム名ゆれの自動フォールバック**(`src/lib/presentations.ts` の `withDateColumnFallback`、`src/lib/referralRequests.ts` の `withTeamColumnFallback`)
    `presentations` テーブルの日付カラムが `presentation_date` でも `present_date` でもエラーにならないよう、両方の名前を試して成功した方をセッション内でキャッシュする。同様に `referral_requests` テーブルの対象パワーチームカラムも `power_team` / `team` の両方を試す。**特定カラムの命名ゆれに対する専用実装**であり、1番の汎用ドロップ方式とは別物。この方式はinsert/updateのペイロードに実際のカラム名を指定する必要がある場合に使う(select("*")は存在するカラムをそのまま返すだけなので、読み取り側は `row.power_team ?? row.team ?? ""` のように両方を見るだけで済み、リトライは不要)。同様の問題が別テーブルで起きた場合はこのパターンを流用してよいが、まず「本当にカラム名が違うのか」を疑うこと(場当たり的にフォールバックを増やすと本当のバグを隠す)。
 3. エラー表示は必ず `src/lib/errorMessage.ts` の `getErrorMessage(err)` を通すこと。SupabaseのPostgrestErrorは `Error` のインスタンスではないため、素朴に `String(err)` すると `[object Object]` になる(過去に実際に起きた不具合)。
-4. **例外: `src/lib/libraryLinks.ts` `src/lib/libraryCategories.ts` `src/lib/events.ts` `src/lib/eventCategories.ts` `src/lib/referralRequests.ts` `src/lib/oneOnOnes.ts` `src/lib/visitorInvites.ts` はエラーを画面に伝播させず、Supabaseアクセスが失敗したら黙ってlocalStorageにフォールバックする**(`withLocalFallback` ヘルパー、各ファイルに同じ実装を個別に持つ)。members/presentationsは失敗をユーザーに知らせる設計だが、これらは「テーブル未作成・通信エラーでも機能自体は使えてほしい」という明示的な要件のため意図的に例外としている(カレンダー機能・リファーラル掲示板・1to1マトリクス・ビジター追跡ボードともに要件定義時点でこの挙動が明示的に指定された)。新しいエンティティを追加する際は、エラーを表示すべきか黙ってフォールバックすべきかを都度判断すること(デフォルトはエラー表示、明示的な要件があれば黙ってフォールバック)。
+4. **例外: `src/lib/libraryLinks.ts` `src/lib/libraryCategories.ts` `src/lib/events.ts` `src/lib/eventCategories.ts` `src/lib/referralRequests.ts` `src/lib/oneOnOnes.ts` `src/lib/visitorInvites.ts` `src/lib/portfolios.ts` `src/lib/activityLogs.ts` はエラーを画面に伝播させず、Supabaseアクセスが失敗したら黙ってlocalStorageにフォールバックする**(`withLocalFallback` ヘルパー、各ファイルに同じ実装を個別に持つ)。members/presentationsは失敗をユーザーに知らせる設計だが、これらは「テーブル未作成・通信エラーでも機能自体は使えてほしい」という明示的な要件のため意図的に例外としている(カレンダー機能・リファーラル掲示板・1to1マトリクス・ビジター追跡ボードともに要件定義時点でこの挙動が明示的に指定された)。新しいエンティティを追加する際は、エラーを表示すべきか黙ってフォールバックすべきかを都度判断すること(デフォルトはエラー表示、明示的な要件があれば黙ってフォールバック)。
+5. **全データバックアップ/復元専用の汎用ヘルパー**(`src/lib/backupHelpers.ts` の `upsertRecordWithColumnFallback` / `upsertManyWithColumnFallback`)。1番の`extractMissingColumn`ベースの列除去リトライを、「idを保持したまま複数レコードを一括upsertする」用途向けに一般化したもの。`src/lib/backup.ts`(`restoreBackupBundle`)から、members/referralRequests/oneOnOnes/visitorInvites/libraryLinks/portfoliosそれぞれの`restoreX`関数経由で使われる。1レコードごとに成否を判定して次のレコードへ進むため、一部のレコードが不正・列不足でも全体の復元処理は止まらない(「安全フォールバック」)。Supabase未設定時は各エンティティのlocalStorageダミーストアへidベースでマージする。
 
 ### ファイルアップロードの設計パターン
 
-`src/lib/memberPhotos.ts`(顔写真)/ `src/lib/memberAttachments.ts`(メンバー添付資料)/ `src/lib/presentationMaterials.ts`(プレゼン資料)は同じ形:
+`src/lib/memberPhotos.ts`(顔写真)/ `src/lib/memberAttachments.ts`(メンバー添付資料・1to1シート添付)/ `src/lib/portfolioImages.ts`(ポートフォリオ写真)は同じ形:
 - Supabase設定時: Storageバケットにアップロードして公開URLを返す
 - 未設定時: `src/lib/fileToDataUrl.ts` でdata URLに変換してlocalStorageに保存
+
+**注意**: プレゼン資料(`presentations.material_url`)はファイルアップロードではなく外部共有URLの直接入力方式のため、`presentationMaterials.ts` は廃止済み(存在しない)。
 
 呼び出し側(`members.ts` の `resolveAttachment` 等)は「新しいファイルが来たらアップロード、来なければ既存URL維持、削除フラグが立っていれば空にする」という3分岐を共通で持つ。
 
@@ -197,11 +204,24 @@ export async function fetchX(): Promise<X[]> {
 
 型定義・CRUD関数は `src/lib/visitorInvites.ts`。ステータスの日本語ラベルは `VISITOR_STATUS_LABELS`(打診中/参加確定/入会検討中/入会済)。
 
+### `portfolios`(商品・事例ポートフォリオギャラリー)
+
+`id`(uuid, PK) `member_id`(uuid, `members.id` へのFK, on delete set null) `title`(タイトル、not null) `description`(解説) `category`(例: 取扱商品/施工事例/サービス実績、`PORTFOLIO_CATEGORY_SUGGESTIONS` 参照) `image_url`(写真の公開URLまたはdata URL) `created_at`
+
+型定義・CRUD関数は `src/lib/portfolios.ts`。写真アップロードは `src/lib/portfolioImages.ts`(`portfolio-images` バケット)。`library_links` 等と同様、エラー時は黙ってlocalStorageへフォールバックする。
+
+### `activity_logs`(活動タイムライン)
+
+`id`(uuid, PK) `action_type`(text。`"member_created" | "member_updated" | "referral_created" | "one_on_one_completed" | "visitor_created"`、DB上はcheck制約なし) `description`(画面表示用の日本語一文) `member_id`(uuid, `members.id` へのFK, on delete set null) `created_at`
+
+型定義・CRUD関数は `src/lib/activityLogs.ts`。`logActivity()` は `members.ts`(`createMember`/`updateMember`)、`referralRequests.ts`(`createReferralRequest`)、`oneOnOnes.ts`(`upsertOneOnOne`)、`visitorInvites.ts`(`createVisitorInvite`)の各成功パスの最後で呼び出される。**`logActivity`自身は内部で例外を握りつぶし、ログ記録の失敗が本来の操作(メンバー保存等)を妨げないようにしている**(呼び出し側でtry/catchする必要はない)。エラー時・未設定時は黙ってlocalStorageへフォールバックする。ローカルフォールバック時は肥大化防止のため直近200件のみ保持する。
+
 ### Storageバケット(すべてpublic)
 
 - `member-photos` — 顔写真(アイコン/バストアップ)
-- `member-attachments` — メンバー詳細の添付資料
-- `presentation-materials` — プレゼン資料
+- `member-attachments` — メンバー詳細の添付資料・1to1シート添付
+- `presentation-materials` — (過去の名残。プレゼン資料は現在URL直接入力方式のため新規アップロードには使用しない)
+- `portfolio-images` — ポートフォリオの商品・事例写真
 
 全バケット共通: 読み取りは誰でも可、書き込み(insert/update/delete)は `authenticated` ロールのみ。
 
@@ -213,6 +233,23 @@ export async function fetchX(): Promise<X[]> {
 - **`dark:` ユーティリティの発火条件を変更した**: 従来はTailwindの既定動作でOSの`prefers-color-scheme: dark`にのみ連動していたが、`globals.css`で `@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));` を宣言し、`<html>`要素の`data-theme="dark"`属性に連動するよう変更した。これにより「システムに合わせる」以外を明示的に選んだ場合にOS設定を上書きできる。既存コンポーネントの`dark:bg-zinc-950`のような大量のクラスはそのまま再利用され、影響を受けるのは発火条件(トリガー)だけ。
 - **FOUC対策**: `ThemeScript.tsx`が`next/script`の`strategy="beforeInteractive"`でheadに同期スクリプトを注入し、hydration前に`localStorage`の設定(または未設定時はOSの設定)から解決した具体的なテーマ(`light`/`dark`/`warm`/`ocean`のいずれか。`system`という値がそのまま属性値になることはない)を`data-theme`属性にセットする。
 - **「背景設定」というスコープを意図的に守っている**: 要件は「背景設定」であり、カード等の個別コンポーネントを含むフルリスキンではない。`warm`/`ocean`は`globals.css`で`--background`/`--foreground`を上書きし、`body`(`bg-background text-foreground`)の背景色・文字色のみを変える。ヘッダーやカードの`bg-white`等の個別クラスはこれらのテーマでは変化しない(`dark`テーマ選択時のみ、既存の`dark:`クラス群が有効になり全面的に暗色になる)。新しいテーマを追加する場合は`src/lib/theme.ts`の`THEME_OPTIONS`と`globals.css`の`[data-theme="..."]`ブロックに追記するだけでよい。
+
+## 文字サイズ切替機能(設計判断)
+
+`src/lib/fontSize.ts` `src/components/FontSizeScript.tsx` `src/components/FontSizeSwitcher.tsx` で構成する。背景テーマ切替と全く同じ設計(保存先・FOUC対策・データ属性駆動)を踏襲しており、実装に迷ったら`theme.ts`系を参照すること。
+
+- ヘッダー右上の「Aa」アイコン(`ALargeSmall`)から「標準(100%)/大(112.5%)/特大(125%)」を選択できる。保存先はlocalStorageのみ(キー: `bni-font-size-preference`)、テーマ設定と同じ理由でアカウント単位ではなく端末単位。
+- 適用方法は `<html data-font-size="large|xlarge">` 属性 + `globals.css` の `html[data-font-size="large"] { font-size: 112.5%; }` 等のCSSルールのみ。**個々のコンポーネントは一切変更していない**。Tailwindのテキストユーティリティ(`text-sm`等)はデフォルトでrem単位のため、ルート要素の`font-size`を変えるだけでアプリ全体の文字サイズが比例して拡大縮小される(標準の`data-font-size`属性なし=100%)。
+- `FontSizeScript.tsx` が `ThemeScript.tsx` と同様 `beforeInteractive` のインラインスクリプトでhydration前に属性を確定し、切替時のちらつきを防ぐ。
+
+## 全データバックアップ・復元機能(設計判断)
+
+`src/lib/backup.ts`(`buildBackupBundle` / `restoreBackupBundle`)+ `src/lib/backupHelpers.ts` + `/admin` ページで構成する。対象は要件で明示された6テーブル(members / referral_requests / one_on_ones / visitor_invites / library_links / portfolios)で、`activity_logs`や`teams`等は対象外(意図的なスコープ限定。ログ・マスタデータまで含めると復元の影響範囲が読みにくくなるため)。
+
+- **エクスポート**: 6エンティティの`fetchX()`を`Promise.all`で並行取得し、`{ format, version, exported_at, members, referral_requests, ... }`の1つのJSONとして書き出す。
+- **復元の順序に注意**: `referral_requests.contact_member_id` / `one_on_ones.member_a_id・member_b_id` / `visitor_invites.inviter_member_id` / `portfolios.member_id` はいずれも`members.id`への外部キーであるため、**membersを先にawaitで復元してから、残り5テーブルを並行復元する**(`restoreBackupBundle`)。この順序を崩すと、実DB(外部キー制約あり)ではmembers復元前に他テーブルの復元が走り、制約違反で失敗しうる。
+- **安全フォールバック**: 各テーブルの復元は`restoreX`関数(各lib内、例: `members.ts`の`restoreMembers`)が担い、内部で`backupHelpers.ts`の`upsertManyWithColumnFallback`を使う。1レコードごとにid基準でupsertし、未マイグレーション列があれば1番のパターンと同様その列だけ除いて再試行、それでも失敗したレコードは`failed`カウントに積んでスキップする(全体を止めない)。Supabase未設定時は各エンティティのlocalStorageダミーストアへidベースでマージする(`fetchX`のダミーストアと同じ実体)。
+- `/admin`画面は復元前に「IDが一致する既存データは上書きされる」旨を`window.confirm`で警告し、復元後はテーブルごとの成功・失敗件数を表で表示する。
 
 ## 実装済み機能
 
@@ -232,6 +269,14 @@ export async function fetchX(): Promise<X[]> {
 - **アバウト・利用ガイド**(`/about`): 全機能(メンバー管理/1to1シートPDF/メインプレゼンターカレンダー/リファーラル掲示板/資料ライブラリ)の目的・使い方を紹介する静的な説明ページ。レスポンシブ・ライト/ダーク対応
 - **チーム管理**(`/settings/teams`): 委員会の追加・編集・削除
 - **背景テーマ切替**(ヘッダー右上): システムに合わせる/ライト/ダーク/ウォーム/オーシャンの5種類。詳細は「背景テーマ切替機能(設計判断)」の節を参照。
+- **文字サイズ切替**(ヘッダー右上): 標準/大/特大の3段階。詳細は「文字サイズ切替機能(設計判断)」の節を参照。
+- **PWA対応**(`public/manifest.json` `public/icon.svg` `src/app/layout.tsx`): スマホでホーム画面に追加すると`display: standalone`(アドレスバーなし)で起動する。`layout.tsx`の`metadata.manifest`/`metadata.icons`/`metadata.appleWebApp`と`export const viewport`(`themeColor`)で構成。**アイコンはSVG1枚のみ**(`public/icon.svg`、zinc-900背景に「EN」の頭文字)。画像処理ツールが使えない環境で用意したものであり、Android/Chromeの「ホーム画面に追加」では問題なく機能するが、iOSのapple-touch-iconは伝統的にPNGを期待するため、**本格運用時は192x192・512x512等のPNGアイコンを別途用意して`public/manifest.json`の`icons`配列と`layout.tsx`の`metadata.icons.apple`を差し替えることを推奨**。
+- **ビジター招待文・お礼状ジェネレーター**(`/visitor-generator`): チャプター名・開催日時・会場・紹介者名・ビジター名を入力すると、`src/lib/inviteGenerator.ts`の`generateInviteTexts()`がLINE用/メール用/SNS用の招待文と参加後のお礼状をテンプレートで自動生成する。DBを一切使わないクライアント完結の機能で、各カードに`CopyTextButton`(`src/components/CopyTextButton.tsx`、クリップボードコピー用の共通コンポーネント)を配置している。
+- **商品・事例ポートフォリオ**(`/portfolio`): メンバーの取扱商品・施工事例・サービス実績を写真+解説付きで投稿・閲覧するギャラリー。メンバー別フィルタータブ、カードクリックで拡大モーダル(編集・削除ボタン付き)表示。`PortfolioForm`で追加編集、写真は`portfolioImages.ts`経由でアップロード。
+- **活動タイムライン**(`/activity`): メンバー登録・更新、リファーラル追加、1to1実施、ビジター追加の操作履歴を新しい順のカードで表示。種別タブで絞り込み可能。ログ自体は各操作の成功時に自動記録される(下記「`activity_logs`」参照)。
+- **ターゲット紹介文AI自動補正**(`/referrals` の登録・編集フォーム内): 「詳細説明」欄に「AI自動補正」ボタンを設置。`src/lib/referralPolish.ts`の`polishReferralDescription()`が、「誰か紹介して」等の曖昧な入力や短すぎる入力を検出し、募集カテゴリ・対象パワーチームの入力値を使って「○○業界で△△にお悩みの経営者様」形式の具体的なターゲット文面へテンプレートロジックで変換する(外部AI APIは呼び出さない)。
+- **全データバックアップ・復元**(`/admin`): members / referral_requests / one_on_ones / visitor_invites / library_links / portfolios の全件を1つのJSONファイルとしてエクスポート/インポートする。詳細は「全データバックアップ・復元機能(設計判断)」の節を参照。
+- **メンバーCSVインポート/エクスポート**(`/members` ヘッダー): 「CSV出力」ボタンで全メンバー情報(写真・添付ファイルURLを除く40列、UTF-8 BOM付き)をダウンロードし、「CSVインポート」ボタンでCSVファイルから一括登録・更新する。詳細は`src/lib/membersCsv.ts`のJSDocおよび下記参照。
 
 ## 開発上の注意点
 
@@ -245,6 +290,8 @@ export async function fetchX(): Promise<X[]> {
 
 ## 開発経緯(主なコミット、直近が上)
 
+1. `Implement PWA, visitor generator, backup/restore, activity timeline, portfolio, target AI polisher, font size toggle, and CSV import/export with CLAUDE.md update` — PWA対応(manifest.json/アイコン)、ビジター招待文・お礼状ジェネレーター(`/visitor-generator`)、全データバックアップ・復元(`/admin`)、活動タイムライン(`/activity`、`activity_logs`テーブル)、商品・事例ポートフォリオ(`/portfolio`、`portfolios`テーブル)、リファーラル詳細説明のAI自動補正、文字サイズ切替(標準/大/特大)、メンバーCSVインポート/エクスポートの8機能を追加
+1. `Fix member bio and GAINS data persistence and state binding issue`
 1. `Add list view and dynamic major categories management to library with CLAUDE.md update` — 資料ライブラリにカード/リスト表示切り替え、`library_categories`マスタによる大分類の動的CRUD管理(`LibraryCategoryManageModal`)、大分類フィルタータブ、`library_links.updated_at`を追加
 1. `Add bio sheet, GAINS worksheet, 1to1 URL support, custom background themes, and presentation URL linkage with CLAUDE.md update` — メンバー略歴シート/G.A.I.N.S.ワークシートの入力タブ・プレビュー・PDF出力、1to1シートのPDF添付+外部URLのデュアル対応、「コメント」→「紹介文」表記変更、プレゼン資料のURL入力方式への変更、背景テーマ切替機能(ライト/ダーク/ウォーム/オーシャン)を追加
 1. `Implement circle map, tag filters, full PDF list, 1to1 matrix, SNS sharing, and visitor tracker with CLAUDE.md update` — パワーチーム別サークルマップ・タグ検索、LINE/SNS共有ボタン、全メンバーリストPDF出力ボタン、1to1実施マトリクス(`/one-on-ones`)、ビジター招待・追跡ボード(`/visitors`)の6機能を追加

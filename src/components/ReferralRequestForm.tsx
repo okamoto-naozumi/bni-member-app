@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import {
   createReferralRequest,
   updateReferralRequest,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/referralRequests";
 import { MEMBER_CATEGORIES } from "@/lib/categories";
 import { POWER_TEAM_SUGGESTIONS } from "@/lib/powerTeams";
+import { polishReferralDescription } from "@/lib/referralPolish";
 import type { Member } from "@/lib/members";
 import { getErrorMessage } from "@/lib/errorMessage";
 
@@ -121,14 +122,27 @@ export default function ReferralRequestForm({
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-            詳細説明
-          </span>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">詳細説明</span>
+            <button
+              type="button"
+              onClick={() =>
+                setDescription(
+                  polishReferralDescription({ description, category, powerTeam })
+                )
+              }
+              title="曖昧な募集文を、具体的なターゲット文面へ自動補正します"
+              className="flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
+            >
+              <Sparkles size={12} />
+              AI自動補正
+            </button>
+          </div>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="input min-h-20 resize-y"
-            placeholder="どのような業種・強みを持つメンバーを探しているか"
+            placeholder="どのような業種・強みを持つメンバーを探しているか(例: 誰か紹介して、でもOK。AI自動補正で具体的な文面に変換できます)"
           />
         </label>
 

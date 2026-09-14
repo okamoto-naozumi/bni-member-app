@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { extractMissingColumn } from "@/lib/postgrestError";
+import { logActivity } from "@/lib/activityLogs";
+import { upsertManyWithColumnFallback, type RestoreResult } from "@/lib/backupHelpers";
 
 export type ReferralRequestStatus = "open" | "in_progress" | "fulfilled";
 
@@ -185,7 +187,7 @@ export async function fetchReferralRequests(): Promise<ReferralRequest[]> {
 export async function createReferralRequest(
   input: ReferralRequestInput
 ): Promise<ReferralRequest> {
-  return withLocalFallback(
+  const created = await withLocalFallback(
     async () => {
       const client = supabase!;
       const { category, description, contact_member_id, status } = input;
@@ -210,6 +212,13 @@ export async function createReferralRequest(
       return request;
     }
   );
+
+  await logActivity({
+    action_type: "referral_created",
+    description: `「${created.category || "カテゴリ未設定"}」のリファーラル募集を追加しました`,
+    member_id: created.contact_member_id,
+  });
+  return created;
 }
 
 export async function updateReferralRequest(
@@ -239,6 +248,21 @@ export async function updateReferralRequest(
       return requests[index];
     }
   );
+}
+
+/**
+ * 全データバックアップからの復元用: idを保持したままレコード配列を丸ごと反映する。
+ */
+export async function restoreReferralRequests(records: ReferralRequest[]): Promise<RestoreResult> {
+  if (!supabase) {
+    const current = loadDummyRequests();
+    const byId = new Map(current.map((r) => [r.id, r]));
+    for (const record of records) byId.set(record.id, record);
+    saveDummyRequests(Array.from(byId.values()));
+    return { succeeded: records.length, failed: 0 };
+  }
+
+  return upsertManyWithColumnFallback(supabase, "referral_requests", records);
 }
 
 export async function deleteReferralRequest(id: string): Promise<void> {

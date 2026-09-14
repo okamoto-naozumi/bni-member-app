@@ -3,6 +3,8 @@ import { uploadMemberPhoto } from "@/lib/memberPhotos";
 import { uploadMemberAttachment, uploadOneToOneAttachment } from "@/lib/memberAttachments";
 import { fileToDataUrl } from "@/lib/fileToDataUrl";
 import { extractMissingColumn } from "@/lib/postgrestError";
+import { logActivity } from "@/lib/activityLogs";
+import { upsertManyWithColumnFallback, type RestoreResult } from "@/lib/backupHelpers";
 
 export interface CustomField {
   key: string;
@@ -746,6 +748,7 @@ export async function createMember(
   // (未マイグレーション環境で列が除外されても、画面上は入力内容が消えないようにするため)。
   cacheBioGainsFields(id, input);
 
+  let created: Member;
   if (supabase) {
     const data = await insertMemberSafely({
       id,
@@ -758,26 +761,33 @@ export async function createMember(
       one_to_one_attachment_name,
       sort_order: Date.now(),
     });
-    return normalizeMember(data);
+    created = normalizeMember(data);
+  } else {
+    const member: Member = {
+      id,
+      ...input,
+      photo_icon_url,
+      photo_bust_url,
+      attachment_url,
+      attachment_name,
+      one_to_one_attachment_url,
+      one_to_one_attachment_name,
+      sort_order: Date.now(),
+      created_at: new Date().toISOString(),
+    };
+
+    const members = loadDummyMembers();
+    members.unshift(member);
+    saveDummyMembers(members);
+    created = member;
   }
 
-  const member: Member = {
-    id,
-    ...input,
-    photo_icon_url,
-    photo_bust_url,
-    attachment_url,
-    attachment_name,
-    one_to_one_attachment_url,
-    one_to_one_attachment_name,
-    sort_order: Date.now(),
-    created_at: new Date().toISOString(),
-  };
-
-  const members = loadDummyMembers();
-  members.unshift(member);
-  saveDummyMembers(members);
-  return member;
+  await logActivity({
+    action_type: "member_created",
+    description: `${created.name || "名称未設定"}さんをメンバーとして登録しました`,
+    member_id: created.id,
+  });
+  return created;
 }
 
 /**
@@ -828,6 +838,7 @@ export async function updateMember(
   // (未マイグレーション環境で列が除外されても、画面上は入力内容が消えないようにするため)。
   cacheBioGainsFields(id, input);
 
+  let updated: Member;
   if (supabase) {
     try {
       const data = await updateMemberSafely(id, {
@@ -839,13 +850,13 @@ export async function updateMember(
         one_to_one_attachment_url,
         one_to_one_attachment_name,
       });
-      return normalizeMember(data);
+      updated = normalizeMember(data);
     } catch (err) {
       console.warn(
         "[members] Supabaseへの更新に失敗したため、localStorageへフォールバック保存します:",
         err
       );
-      return normalizeMember(
+      updated = normalizeMember(
         saveMemberUpdateFallbackLocally(id, input, {
           photo_icon_url,
           photo_bust_url,
@@ -856,24 +867,30 @@ export async function updateMember(
         })
       );
     }
+  } else {
+    const members = loadDummyMembers();
+    const index = members.findIndex((m) => m.id === id);
+    if (index === -1) throw new Error("メンバーが見つかりません");
+
+    updated = {
+      ...members[index],
+      ...input,
+      photo_icon_url,
+      photo_bust_url,
+      attachment_url,
+      attachment_name,
+      one_to_one_attachment_url,
+      one_to_one_attachment_name,
+    };
+    members[index] = updated;
+    saveDummyMembers(members);
   }
 
-  const members = loadDummyMembers();
-  const index = members.findIndex((m) => m.id === id);
-  if (index === -1) throw new Error("メンバーが見つかりません");
-
-  const updated: Member = {
-    ...members[index],
-    ...input,
-    photo_icon_url,
-    photo_bust_url,
-    attachment_url,
-    attachment_name,
-    one_to_one_attachment_url,
-    one_to_one_attachment_name,
-  };
-  members[index] = updated;
-  saveDummyMembers(members);
+  await logActivity({
+    action_type: "member_updated",
+    description: `${updated.name || "名称未設定"}さんのメンバー情報を更新しました`,
+    member_id: updated.id,
+  });
   return updated;
 }
 
@@ -909,4 +926,21 @@ export async function reorderMembers(orderedIds: string[]): Promise<void> {
     orderMap.has(m.id) ? { ...m, sort_order: orderMap.get(m.id) as number } : m
   );
   saveDummyMembers(members);
+}
+
+/**
+ * 全データバックアップからの復元用: idを保持したままレコード配列を丸ごと反映する。
+ * Supabase設定時はid基準でupsertし(列が未マイグレーションなら除外して再試行)、
+ * 未設定時はlocalStorageのダミーストアへidベースでマージする。
+ */
+export async function restoreMembers(records: Member[]): Promise<RestoreResult> {
+  if (!supabase) {
+    const current = loadDummyMembers();
+    const byId = new Map(current.map((m) => [m.id, m]));
+    for (const record of records) byId.set(record.id, record);
+    saveDummyMembers(Array.from(byId.values()));
+    return { succeeded: records.length, failed: 0 };
+  }
+
+  return upsertManyWithColumnFallback(supabase, "members", records);
 }

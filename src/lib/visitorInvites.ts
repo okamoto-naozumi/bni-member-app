@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activityLogs";
+import { upsertManyWithColumnFallback, type RestoreResult } from "@/lib/backupHelpers";
 
 export type VisitorInviteStatus = "invited" | "confirmed" | "considering" | "joined";
 
@@ -129,7 +131,7 @@ export async function fetchVisitorInvites(): Promise<VisitorInvite[]> {
 }
 
 export async function createVisitorInvite(input: VisitorInviteInput): Promise<VisitorInvite> {
-  return withLocalFallback(
+  const created = await withLocalFallback(
     async () => {
       const { data, error } = await supabase!
         .from("visitor_invites")
@@ -151,6 +153,13 @@ export async function createVisitorInvite(input: VisitorInviteInput): Promise<Vi
       return invite;
     }
   );
+
+  await logActivity({
+    action_type: "visitor_created",
+    description: `ビジター「${created.visitor_name}」を追加しました`,
+    member_id: created.inviter_member_id,
+  });
+  return created;
 }
 
 export async function updateVisitorInvite(
@@ -177,6 +186,21 @@ export async function updateVisitorInvite(
       return invites[index];
     }
   );
+}
+
+/**
+ * 全データバックアップからの復元用: idを保持したままレコード配列を丸ごと反映する。
+ */
+export async function restoreVisitorInvites(records: VisitorInvite[]): Promise<RestoreResult> {
+  if (!supabase) {
+    const current = loadDummyInvites();
+    const byId = new Map(current.map((v) => [v.id, v]));
+    for (const record of records) byId.set(record.id, record);
+    saveDummyInvites(Array.from(byId.values()));
+    return { succeeded: records.length, failed: 0 };
+  }
+
+  return upsertManyWithColumnFallback(supabase, "visitor_invites", records);
 }
 
 export async function deleteVisitorInvite(id: string): Promise<void> {

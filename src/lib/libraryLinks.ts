@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { upsertManyWithColumnFallback, type RestoreResult } from "@/lib/backupHelpers";
 
 export interface LibraryLink {
   id: string;
@@ -171,6 +172,21 @@ export async function updateLibraryLink(
       return links[index];
     }
   );
+}
+
+/**
+ * 全データバックアップからの復元用: idを保持したままレコード配列を丸ごと反映する。
+ */
+export async function restoreLibraryLinks(records: LibraryLink[]): Promise<RestoreResult> {
+  if (!supabase) {
+    const current = loadDummyLinks();
+    const byId = new Map(current.map((l) => [l.id, l]));
+    for (const record of records) byId.set(record.id, record);
+    saveDummyLinks(Array.from(byId.values()));
+    return { succeeded: records.length, failed: 0 };
+  }
+
+  return upsertManyWithColumnFallback(supabase, "library_links", records);
 }
 
 export async function deleteLibraryLink(id: string): Promise<void> {

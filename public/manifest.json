@@ -1,0 +1,20 @@
+{
+  "name": "BNI ENISHIチャプター メンバー管理",
+  "short_name": "BNI ENISHI",
+  "description": "BNI ENISHIチャプターのメンバー名簿・グループ編成・リファーラル掲示板などを管理する社内ツール",
+  "start_url": "/members",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#fafafa",
+  "theme_color": "#18181b",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

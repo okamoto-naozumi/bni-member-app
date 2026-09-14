@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { pdf } from "@react-pdf/renderer";
-import { Download, Grid3x3, LayoutGrid, Search } from "lucide-react";
+import { Download, FileDown, FileUp, Grid3x3, LayoutGrid, Search } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { deleteMember, fetchMembers, reorderMembers, type Member } from "@/lib/members";
 import { getErrorMessage } from "@/lib/errorMessage";
@@ -20,6 +20,7 @@ import { buildImageDataUriMap } from "@/lib/pdf/imageSrc";
 import MemberListDocument from "@/lib/pdf/MemberListDocument";
 import { POWER_TEAM_SUGGESTIONS } from "@/lib/powerTeams";
 import { buildPowerTeamGroups, getPowerTeamForCategory } from "@/lib/memberPowerTeams";
+import { serializeMembersCsv, importMembersFromCsv } from "@/lib/membersCsv";
 import MemberCard from "@/components/MemberCard";
 import SortableMemberCard from "@/components/SortableMemberCard";
 import MemberForm from "@/components/MemberForm";
@@ -85,6 +86,9 @@ export default function MembersPage() {
   const [badgeFilters, setBadgeFilters] = useState<Set<BadgeTier>>(new Set());
   const [powerTeamFilter, setPowerTeamFilter] = useState<string | null>(null);
   const [downloadingFullPdf, setDownloadingFullPdf] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const [csvMessage, setCsvMessage] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -178,6 +182,40 @@ export default function MembersPage() {
     }
   }
 
+  function handleDownloadCsv() {
+    const csv = serializeMembersCsv(members);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "bni-members.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleCsvFileSelected(file: File | null) {
+    if (!file) return;
+    setImportingCsv(true);
+    setCsvMessage(null);
+    setLoadError(null);
+    try {
+      const text = await file.text();
+      const result = await importMembersFromCsv(text, members);
+      const refreshed = await fetchMembers();
+      setMembers(refreshed);
+      setCsvMessage(
+        `CSVインポート完了: 新規${result.created}件 / 更新${result.updated}件 / スキップ${result.skipped}件`
+      );
+    } catch (err) {
+      setLoadError(getErrorMessage(err));
+    } finally {
+      setImportingCsv(false);
+      if (csvInputRef.current) csvInputRef.current.value = "";
+    }
+  }
+
   function handleSaved(member: Member) {
     setMembers((prev) => {
       const exists = prev.some((m) => m.id === member.id);
@@ -246,6 +284,31 @@ export default function MembersPage() {
             <Download size={14} />
             {downloadingFullPdf ? "生成中..." : "全メンバーリストPDF出力"}
           </button>
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            disabled={members.length === 0}
+            className="flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <FileDown size={14} />
+            CSV出力
+          </button>
+          <button
+            type="button"
+            onClick={() => csvInputRef.current?.click()}
+            disabled={importingCsv}
+            className="flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <FileUp size={14} />
+            {importingCsv ? "取込中..." : "CSVインポート"}
+          </button>
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => handleCsvFileSelected(e.target.files?.[0] ?? null)}
+          />
           <div className="flex items-center gap-1 rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
             <button
               type="button"
@@ -281,6 +344,12 @@ export default function MembersPage() {
         <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
           Supabase未設定のため、ダミーデータで動作しています(ブラウザのlocalStorageに保存されます)。
           .env.local を設定すると実データベースに接続されます。
+        </p>
+      )}
+
+      {csvMessage && (
+        <p className="mt-2 rounded-lg bg-emerald-100 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+          {csvMessage}
         </p>
       )}
 

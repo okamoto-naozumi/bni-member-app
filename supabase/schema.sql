@@ -492,3 +492,97 @@ create policy "Authenticated users can delete visitor invites"
   on public.visitor_invites for delete
   to authenticated
   using (true);
+
+-- Portfolios (商品・事例ポートフォリオギャラリー)
+create table if not exists public.portfolios (
+  id uuid primary key default gen_random_uuid(),
+  title text not null
+);
+
+alter table public.portfolios add column if not exists member_id uuid references public.members(id) on delete set null;
+alter table public.portfolios add column if not exists description text;
+alter table public.portfolios add column if not exists category text;
+alter table public.portfolios add column if not exists image_url text;
+alter table public.portfolios add column if not exists created_at timestamptz not null default now();
+
+alter table public.portfolios enable row level security;
+
+drop policy if exists "Portfolios are publicly readable" on public.portfolios;
+create policy "Portfolios are publicly readable"
+  on public.portfolios for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert portfolios" on public.portfolios;
+create policy "Authenticated users can insert portfolios"
+  on public.portfolios for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update portfolios" on public.portfolios;
+create policy "Authenticated users can update portfolios"
+  on public.portfolios for update
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can delete portfolios" on public.portfolios;
+create policy "Authenticated users can delete portfolios"
+  on public.portfolios for delete
+  to authenticated
+  using (true);
+
+-- Storage bucket for portfolio images (商品・事例写真)
+insert into storage.buckets (id, name, public)
+values ('portfolio-images', 'portfolio-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Portfolio images are publicly readable" on storage.objects;
+create policy "Portfolio images are publicly readable"
+  on storage.objects for select
+  using (bucket_id = 'portfolio-images');
+
+drop policy if exists "Authenticated users can upload portfolio images" on storage.objects;
+create policy "Authenticated users can upload portfolio images"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'portfolio-images');
+
+drop policy if exists "Authenticated users can update portfolio images" on storage.objects;
+create policy "Authenticated users can update portfolio images"
+  on storage.objects for update
+  to authenticated
+  using (bucket_id = 'portfolio-images');
+
+drop policy if exists "Authenticated users can delete portfolio images" on storage.objects;
+create policy "Authenticated users can delete portfolio images"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'portfolio-images');
+
+-- Activity logs (活動タイムライン。メンバー更新・リファーラル追加・1to1実施・ビジター追加等の履歴)
+create table if not exists public.activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  action_type text not null
+);
+
+alter table public.activity_logs add column if not exists description text;
+alter table public.activity_logs add column if not exists member_id uuid references public.members(id) on delete set null;
+alter table public.activity_logs add column if not exists created_at timestamptz not null default now();
+
+alter table public.activity_logs enable row level security;
+
+drop policy if exists "Activity logs are publicly readable" on public.activity_logs;
+create policy "Activity logs are publicly readable"
+  on public.activity_logs for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert activity logs" on public.activity_logs;
+create policy "Authenticated users can insert activity logs"
+  on public.activity_logs for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can delete activity logs" on public.activity_logs;
+create policy "Authenticated users can delete activity logs"
+  on public.activity_logs for delete
+  to authenticated
+  using (true);

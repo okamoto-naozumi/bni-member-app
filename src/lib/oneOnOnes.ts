@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activityLogs";
+import { upsertManyWithColumnFallback, type RestoreResult } from "@/lib/backupHelpers";
 
 export interface OneOnOne {
   id: string;
@@ -102,7 +104,7 @@ export async function upsertOneOnOne(input: OneOnOneInput): Promise<OneOnOne> {
   const [member_a_id, member_b_id] = [input.member_a_id, input.member_b_id].sort();
   const payload = { member_a_id, member_b_id, completed_at: input.completed_at, note: input.note };
 
-  return withLocalFallback(
+  const saved = await withLocalFallback(
     async () => {
       const client = supabase!;
       const { data: existing, error: findError } = await client
@@ -151,6 +153,28 @@ export async function upsertOneOnOne(input: OneOnOneInput): Promise<OneOnOne> {
       return created;
     }
   );
+
+  await logActivity({
+    action_type: "one_on_one_completed",
+    description: "1to1を実施し、記録を保存しました",
+    member_id: saved.member_a_id,
+  });
+  return saved;
+}
+
+/**
+ * 全データバックアップからの復元用: idを保持したままレコード配列を丸ごと反映する。
+ */
+export async function restoreOneOnOnes(records: OneOnOne[]): Promise<RestoreResult> {
+  if (!supabase) {
+    const current = loadDummyOneOnOnes();
+    const byId = new Map(current.map((o) => [o.id, o]));
+    for (const record of records) byId.set(record.id, record);
+    saveDummyOneOnOnes(Array.from(byId.values()));
+    return { succeeded: records.length, failed: 0 };
+  }
+
+  return upsertManyWithColumnFallback(supabase, "one_on_ones", records);
 }
 
 export async function deleteOneOnOne(id: string): Promise<void> {
