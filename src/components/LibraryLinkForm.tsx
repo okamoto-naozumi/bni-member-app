@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import {
   createLibraryLink,
   updateLibraryLink,
-  LIBRARY_CATEGORY_SUGGESTIONS,
   type LibraryLink,
   type LibraryLinkInput,
 } from "@/lib/libraryLinks";
+import { fetchLibraryCategories, type LibraryCategory } from "@/lib/libraryCategories";
 import { getErrorMessage } from "@/lib/errorMessage";
 
 export default function LibraryLinkForm({
@@ -24,8 +24,13 @@ export default function LibraryLinkForm({
   const [description, setDescription] = useState(initial?.description ?? "");
   const [url, setUrl] = useState(initial?.url ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
+  const [categories, setCategories] = useState<LibraryCategory[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchLibraryCategories().then(setCategories);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -104,20 +109,26 @@ export default function LibraryLinkForm({
 
         <label className="block text-sm">
           <span className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-            カテゴリ
+            大分類カテゴリー
           </span>
-          <input
+          <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             className="input"
-            placeholder="例: 定例会資料"
-            list="library-category-suggestions"
-          />
-          <datalist id="library-category-suggestions">
-            {LIBRARY_CATEGORY_SUGGESTIONS.map((c) => (
-              <option key={c} value={c} />
+          >
+            <option value="">未設定</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
             ))}
-          </datalist>
+            {category && !categories.some((c) => c.name === category) && (
+              <option value={category}>{category}(未登録)</option>
+            )}
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">
+            大分類の追加・編集・削除は資料ライブラリ画面上部の「大分類を管理」から行えます。
+          </p>
         </label>
 
         <label className="block text-sm">

@@ -283,6 +283,7 @@ alter table public.library_links add column if not exists description text;
 alter table public.library_links add column if not exists url text;
 alter table public.library_links add column if not exists category text;
 alter table public.library_links add column if not exists created_at timestamptz not null default now();
+alter table public.library_links add column if not exists updated_at timestamptz not null default now();
 
 alter table public.library_links enable row level security;
 
@@ -306,6 +307,40 @@ create policy "Authenticated users can update library links"
 drop policy if exists "Authenticated users can delete library links" on public.library_links;
 create policy "Authenticated users can delete library links"
   on public.library_links for delete
+  to authenticated
+  using (true);
+
+-- Library categories (資料ライブラリの大分類マスタ。library_links.category と名前で名寄せする)
+create table if not exists public.library_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique
+);
+
+alter table public.library_categories add column if not exists sort_order bigint not null default 0;
+alter table public.library_categories add column if not exists created_at timestamptz not null default now();
+
+alter table public.library_categories enable row level security;
+
+drop policy if exists "Library categories are publicly readable" on public.library_categories;
+create policy "Library categories are publicly readable"
+  on public.library_categories for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert library categories" on public.library_categories;
+create policy "Authenticated users can insert library categories"
+  on public.library_categories for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update library categories" on public.library_categories;
+create policy "Authenticated users can update library categories"
+  on public.library_categories for update
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can delete library categories" on public.library_categories;
+create policy "Authenticated users can delete library categories"
+  on public.library_categories for delete
   to authenticated
   using (true);
 

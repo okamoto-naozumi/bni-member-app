@@ -6,9 +6,11 @@ export interface LibraryLink {
   description: string;
   /** Googleドライブ等の共有URL */
   url: string;
-  /** 例: 定例会資料、フォーマット、ガイドライン */
+  /** 大分類カテゴリー名(library_categoriesのnameと名寄せ。自由入力の名残データも許容する) */
   category: string;
   created_at: string;
+  /** 最終更新日時。作成時はcreated_atと同値、更新の都度サーバー側で更新する */
+  updated_at: string;
 }
 
 export interface LibraryLinkInput {
@@ -18,26 +20,19 @@ export interface LibraryLinkInput {
   category: string;
 }
 
-export const LIBRARY_CATEGORY_SUGGESTIONS = [
-  "定例会資料",
-  "フォーマット",
-  "ガイドライン",
-  "研修・教育",
-  "広報・PR素材",
-  "その他",
-] as const;
-
 const DUMMY_STORAGE_KEY = "bni-dummy-library-links-v1";
 
 function buildSeedLinks(): LibraryLink[] {
+  const now = new Date().toISOString();
   return [
     {
       id: "dummy-library-1",
       title: "定例会 進行シナリオ テンプレート",
       description: "毎週の定例会で使用する進行台本のフォーマットです。司会担当は事前にコピーしてご利用ください。",
       url: "https://drive.google.com/",
-      category: "定例会資料",
-      created_at: new Date().toISOString(),
+      category: "運営",
+      created_at: now,
+      updated_at: now,
     },
     {
       id: "dummy-library-2",
@@ -45,15 +40,17 @@ function buildSeedLinks(): LibraryLink[] {
       description: "システムのPDF自動生成が使えない場合の手書き用フォーマットです。",
       url: "https://drive.google.com/",
       category: "フォーマット",
-      created_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
     },
     {
       id: "dummy-library-3",
       title: "ビジター招待ガイドライン",
       description: "ビジターを招待する際の注意点、パワーチームの不足カテゴリーの伝え方をまとめています。",
       url: "https://drive.google.com/",
-      category: "ガイドライン",
-      created_at: new Date().toISOString(),
+      category: "ビジホス",
+      created_at: now,
+      updated_at: now,
     },
   ];
 }
@@ -86,6 +83,7 @@ function normalizeLink(l: LibraryLink): LibraryLink {
     description: l.description ?? "",
     url: l.url ?? "",
     category: l.category ?? "",
+    updated_at: l.updated_at ?? l.created_at ?? "",
   };
 }
 
@@ -134,10 +132,12 @@ export async function createLibraryLink(input: LibraryLinkInput): Promise<Librar
       return normalizeLink(data as LibraryLink);
     },
     () => {
+      const now = new Date().toISOString();
       const link: LibraryLink = {
         id: crypto.randomUUID(),
         ...input,
-        created_at: new Date().toISOString(),
+        created_at: now,
+        updated_at: now,
       };
       const links = loadDummyLinks();
       links.unshift(link);
@@ -155,7 +155,7 @@ export async function updateLibraryLink(
     async () => {
       const { data, error } = await supabase!
         .from("library_links")
-        .update(input)
+        .update({ ...input, updated_at: new Date().toISOString() })
         .eq("id", id)
         .select()
         .single();
@@ -166,7 +166,7 @@ export async function updateLibraryLink(
       const links = loadDummyLinks();
       const index = links.findIndex((l) => l.id === id);
       if (index === -1) throw new Error("資料が見つかりません");
-      links[index] = { ...links[index], ...input };
+      links[index] = { ...links[index], ...input, updated_at: new Date().toISOString() };
       saveDummyLinks(links);
       return links[index];
     }
