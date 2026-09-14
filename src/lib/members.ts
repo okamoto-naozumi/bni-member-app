@@ -517,6 +517,9 @@ async function resolveOneToOneAttachment(
 /**
  * insert/update を実行し、DBにまだ存在しない列が原因でエラーになった場合は
  * その列を除いて自動的に再試行する。既存環境(未マイグレーション)との互換性を保つための処置。
+ * 略歴・G.A.I.N.S.等、一度に追加される新設カラム数が多くなり得るため、
+ * 再試行回数はペイロードの項目数に合わせて動的に決める(固定回数だと項目数が多い場合に
+ * 全ての未知カラムを除去しきれず、本来救済できるはずのケースでも失敗していた)。
  */
 async function insertMemberSafely(
   payload: Record<string, unknown>
@@ -525,7 +528,8 @@ async function insertMemberSafely(
   if (!client) throw new Error("Supabase is not configured");
 
   let attempt = payload;
-  for (let i = 0; i < 10; i++) {
+  const maxAttempts = Object.keys(payload).length + 1;
+  for (let i = 0; i < maxAttempts; i++) {
     const { data, error } = await client.from("members").insert(attempt).select().single();
     if (!error) return data as Member;
 
@@ -550,7 +554,8 @@ async function updateMemberSafely(
   if (!client) throw new Error("Supabase is not configured");
 
   let attempt = payload;
-  for (let i = 0; i < 10; i++) {
+  const maxAttempts = Object.keys(payload).length + 1;
+  for (let i = 0; i < maxAttempts; i++) {
     const { data, error } = await client
       .from("members")
       .update(attempt)
@@ -570,6 +575,47 @@ async function updateMemberSafely(
   throw new Error(
     "メンバーの更新に失敗しました。データベースのスキーマが最新ではない可能性があります。"
   );
+}
+
+/**
+ * Supabaseへの更新がどうしても成立しない場合(未マイグレーションの列が多すぎる、
+ * 一時的な通信エラーなど)の最終防御ライン。ユーザーの入力を失わないよう、
+ * localStorageのダミーストアへ保存する。
+ * 注意: Supabase設定時、通常の一覧取得(fetchMembers)はこのローカル保存分を読みに行かないため、
+ * 次回のページ再読み込みでは反映されない。あくまで「エラー画面で入力内容を失わせない」ための
+ * 一時的なセーフティネットであり、恒久的な二重管理を意図したものではない。
+ */
+function saveMemberUpdateFallbackLocally(
+  id: string,
+  input: MemberInput,
+  resolved: {
+    photo_icon_url: string;
+    photo_bust_url: string;
+    attachment_url: string;
+    attachment_name: string;
+    one_to_one_attachment_url: string;
+    one_to_one_attachment_name: string;
+  }
+): Member {
+  const patch = { id, ...input, ...resolved };
+  const members = loadDummyMembers();
+  const index = members.findIndex((m) => m.id === id);
+
+  if (index === -1) {
+    const member: Member = {
+      ...patch,
+      sort_order: Date.now(),
+      created_at: new Date().toISOString(),
+    };
+    members.unshift(member);
+    saveDummyMembers(members);
+    return member;
+  }
+
+  const updated: Member = { ...members[index], ...patch };
+  members[index] = updated;
+  saveDummyMembers(members);
+  return updated;
 }
 
 /**
@@ -675,16 +721,33 @@ export async function updateMember(
   );
 
   if (supabase) {
-    const data = await updateMemberSafely(id, {
-      ...input,
-      photo_icon_url,
-      photo_bust_url,
-      attachment_url,
-      attachment_name,
-      one_to_one_attachment_url,
-      one_to_one_attachment_name,
-    });
-    return normalizeMember(data);
+    try {
+      const data = await updateMemberSafely(id, {
+        ...input,
+        photo_icon_url,
+        photo_bust_url,
+        attachment_url,
+        attachment_name,
+        one_to_one_attachment_url,
+        one_to_one_attachment_name,
+      });
+      return normalizeMember(data);
+    } catch (err) {
+      console.warn(
+        "[members] Supabaseへの更新に失敗したため、localStorageへフォールバック保存します:",
+        err
+      );
+      return normalizeMember(
+        saveMemberUpdateFallbackLocally(id, input, {
+          photo_icon_url,
+          photo_bust_url,
+          attachment_url,
+          attachment_name,
+          one_to_one_attachment_url,
+          one_to_one_attachment_name,
+        })
+      );
+    }
   }
 
   const members = loadDummyMembers();

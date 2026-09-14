@@ -81,7 +81,8 @@ export async function fetchX(): Promise<X[]> {
 ### PostgrestError対策(2つの独立した仕組み、混同しないこと)
 
 1. **列が存在しない場合の自動フォールバック**(`src/lib/postgrestError.ts` の `extractMissingColumn`)
-   本番DBのマイグレーション(`schema.sql`の再実行)が漏れていて新しいカラムが存在しない場合、insert/updateのペイロードからそのカラムを自動的に除いて再送信する。`members.ts` の `insertMemberSafely` / `updateMemberSafely` が使用。
+   本番DBのマイグレーション(`schema.sql`の再実行)が漏れていて新しいカラムが存在しない場合、insert/updateのペイロードからそのカラムを自動的に除いて再送信する。`members.ts` の `insertMemberSafely` / `updateMemberSafely` が使用。**再試行回数はペイロードの項目数(`Object.keys(payload).length + 1`)に応じて動的に決めており、固定回数(旧実装では10回)にしていない**。略歴・G.A.I.N.S.等、機能追加時に新設カラムが10個を超えて一度に増えることがあり、固定回数だと未マイグレーション環境で本来救済できるはずの更新まで失敗していたための修正。
+   さらに `updateMember`(`members.ts`)は、上記の列除去リトライを尽くしてもなお`updateMemberSafely`が失敗した場合(通信エラー等)に備え、**エラー画面を出さずlocalStorageのダミーストアへフォールバック保存する**保護ロジックを持つ(`saveMemberUpdateFallbackLocally`)。これはmembersが本来「エラーを画面に伝播させる」設計(下記4番参照)であることの例外であり、あくまで「更新フォームでの入力内容を失わせない」ための最終防御ライン。**Supabase設定時は通常の一覧取得(`fetchMembers`)がこのローカル保存分を読みに行かないため、フォールバックが発動したメンバーの編集内容は次回のページ再読み込みでは反映されない**(恒久的な二重管理は意図していない)。
 2. **カラム名ゆれの自動フォールバック**(`src/lib/presentations.ts` の `withDateColumnFallback`、`src/lib/referralRequests.ts` の `withTeamColumnFallback`)
    `presentations` テーブルの日付カラムが `presentation_date` でも `present_date` でもエラーにならないよう、両方の名前を試して成功した方をセッション内でキャッシュする。同様に `referral_requests` テーブルの対象パワーチームカラムも `power_team` / `team` の両方を試す。**特定カラムの命名ゆれに対する専用実装**であり、1番の汎用ドロップ方式とは別物。この方式はinsert/updateのペイロードに実際のカラム名を指定する必要がある場合に使う(select("*")は存在するカラムをそのまま返すだけなので、読み取り側は `row.power_team ?? row.team ?? ""` のように両方を見るだけで済み、リトライは不要)。同様の問題が別テーブルで起きた場合はこのパターンを流用してよいが、まず「本当にカラム名が違うのか」を疑うこと(場当たり的にフォールバックを増やすと本当のバグを隠す)。
 3. エラー表示は必ず `src/lib/errorMessage.ts` の `getErrorMessage(err)` を通すこと。SupabaseのPostgrestErrorは `Error` のインスタンスではないため、素朴に `String(err)` すると `[object Object]` になる(過去に実際に起きた不具合)。
