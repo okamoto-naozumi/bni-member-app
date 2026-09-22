@@ -586,3 +586,25 @@ create policy "Authenticated users can delete activity logs"
   on public.activity_logs for delete
   to authenticated
   using (true);
+
+-- Shared teams (外部営業先向け閲覧専用共有チームページ /team/[id])
+create table if not exists public.shared_teams (
+  id uuid primary key default gen_random_uuid(),
+  name text not null
+);
+
+alter table public.shared_teams add column if not exists member_ids uuid[] not null default '{}';
+alter table public.shared_teams add column if not exists created_at timestamptz not null default now();
+
+alter table public.shared_teams enable row level security;
+
+drop policy if exists "Shared teams are publicly readable" on public.shared_teams;
+create policy "Shared teams are publicly readable"
+  on public.shared_teams for select
+  using (true);
+
+drop policy if exists "Authenticated users can insert shared teams" on public.shared_teams;
+create policy "Authenticated users can insert shared teams"
+  on public.shared_teams for insert
+  to authenticated
+  with check (true);

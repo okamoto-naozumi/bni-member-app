@@ -13,6 +13,9 @@ export default function MemberCard({
   onDetail,
   onEdit,
   onDelete,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   member: Member;
   /** メンバーの名刺ページ(/m/[id])へ遷移するQRコードのdata URL。show_qr_codeがtrueの間だけ表示に使用する。 */
@@ -20,12 +23,27 @@ export default function MemberCard({
   onDetail?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  /** 外部共有URL発行のための複数選択チェックボックスを表示する(/membersのみ) */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const [worksheet, setWorksheet] = useState<"bio" | "gains" | null>(null);
 
   return (
     <div className="flex gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
       <div className="flex shrink-0 flex-col items-center gap-1.5">
+        {selectable && (
+          <label className="flex items-center gap-1 self-start text-xs text-zinc-500 dark:text-zinc-400">
+            <input
+              type="checkbox"
+              checked={Boolean(selected)}
+              onChange={onToggleSelect}
+              className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+              aria-label={`${member.name}を選択`}
+            />
+          </label>
+        )}
         {/* eslint-disable-next-line @next/next/no-img-element -- photo_icon_url may be a data URL or arbitrary remote host */}
         <img
           src={member.photo_icon_url}

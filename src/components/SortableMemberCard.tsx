@@ -12,12 +12,18 @@ export default function SortableMemberCard({
   onDetail,
   onEdit,
   onDelete,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   member: Member;
   qrCodeUrl?: string | null;
   onDetail: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: member.id,
@@ -49,6 +55,9 @@ export default function SortableMemberCard({
         onDetail={onDetail}
         onEdit={onEdit}
         onDelete={onDelete}
+        selectable={selectable}
+        selected={selected}
+        onToggleSelect={onToggleSelect}
       />
     </div>
   );

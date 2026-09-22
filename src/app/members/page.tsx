@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { pdf } from "@react-pdf/renderer";
-import { Download, FileDown, FileUp, Grid3x3, LayoutGrid, Search } from "lucide-react";
+import { Download, FileDown, FileUp, Grid3x3, LayoutGrid, Link2, Search, X } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { deleteMember, fetchMembers, reorderMembers, type Member } from "@/lib/members";
 import { getErrorMessage } from "@/lib/errorMessage";
@@ -27,6 +27,7 @@ import MemberForm from "@/components/MemberForm";
 import MemberDetailModal from "@/components/MemberDetailModal";
 import PresenterReminderBanner from "@/components/PresenterReminderBanner";
 import PowerTeamCircleMap from "@/components/PowerTeamCircleMap";
+import ShareTeamModal from "@/components/ShareTeamModal";
 
 type Tab = "list" | "edit";
 type SortKey = "kana" | "team" | "created" | "manual";
@@ -89,6 +90,8 @@ export default function MembersPage() {
   const [importingCsv, setImportingCsv] = useState(false);
   const [csvMessage, setCsvMessage] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -256,6 +259,15 @@ export default function MembersPage() {
     } catch (err) {
       setLoadError(getErrorMessage(err));
     }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function startEdit(member: Member) {
@@ -500,6 +512,9 @@ export default function MembersPage() {
                         onDetail={() => setDetailMember(m)}
                         onEdit={() => startEdit(m)}
                         onDelete={() => handleDelete(m)}
+                        selectable
+                        selected={selectedIds.has(m.id)}
+                        onToggleSelect={() => toggleSelect(m.id)}
                       />
                     ))}
                   </div>
@@ -515,6 +530,9 @@ export default function MembersPage() {
                     onDetail={() => setDetailMember(m)}
                     onEdit={() => startEdit(m)}
                     onDelete={() => handleDelete(m)}
+                    selectable
+                    selected={selectedIds.has(m.id)}
+                    onToggleSelect={() => toggleSelect(m.id)}
                   />
                 ))}
               </div>
@@ -537,6 +555,41 @@ export default function MembersPage() {
 
       {detailMember && (
         <MemberDetailModal member={detailMember} onClose={() => setDetailMember(null)} />
+      )}
+
+      {selectedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
+          <div className="flex items-center gap-3 rounded-full border border-zinc-200 bg-white px-4 py-2 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              {selectedIds.size}人選択中
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowShareModal(true)}
+              className="flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
+            >
+              <Link2 size={14} />
+              外部共有URLを作成
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="flex items-center gap-1 rounded-full px-2 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+              aria-label="選択解除"
+            >
+              <X size={14} />
+              選択解除
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showShareModal && (
+        <ShareTeamModal
+          memberIds={Array.from(selectedIds)}
+          onClose={() => setShowShareModal(false)}
+          onCreated={() => setSelectedIds(new Set())}
+        />
       )}
     </div>
   );

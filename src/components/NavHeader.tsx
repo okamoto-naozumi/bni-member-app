@@ -42,6 +42,8 @@ const NAV_ITEMS = [
 
 export default function NavHeader() {
   const pathname = usePathname();
+  // /team/[id] は外部営業先に共有する閲覧専用ページのため、内部向けナビゲーションを一切出さない
+  const isPublicShare = pathname?.startsWith("/team/");
 
   return (
     <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-black/90">
@@ -50,30 +52,34 @@ export default function NavHeader() {
           <span className="text-sm font-semibold tracking-wide text-zinc-900 dark:text-zinc-50">
             BNI ENISHIチャプター メンバー管理
           </span>
-          <div className="flex shrink-0 items-center gap-1">
-            <FontSizeSwitcher />
-            <ThemeSwitcher />
-          </div>
+          {!isPublicShare && (
+            <div className="flex shrink-0 items-center gap-1">
+              <FontSizeSwitcher />
+              <ThemeSwitcher />
+            </div>
+          )}
         </div>
-        <nav className="flex flex-wrap items-center gap-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = pathname?.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-black"
-                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
-                }`}
-              >
-                <Icon size={14} />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        {!isPublicShare && (
+          <nav className="flex flex-wrap items-center gap-1">
+            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+              const active = pathname?.startsWith(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-black"
+                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                  }`}
+                >
+                  <Icon size={14} />
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
       </div>
     </header>
   );

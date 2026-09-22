@@ -50,6 +50,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
   - `/about` — アバウト・利用ガイド(全機能の概要と使い方を説明する静的ページ)
   - `/settings/teams` — チーム(委員会)マスタ管理
   - `/m/[id]` — メンバー個人のデジタル名刺ページ(QRコードの遷移先、`show_qr_code` がtrueの場合のみQR表示)
+  - `/team/[id]` — 外部営業先へ特定メンバーだけを紹介するための閲覧専用共有チームページ。`/members` で複数メンバーを選択して発行する。詳細は「外部共有チームページ機能(設計判断)」の節を参照
   - `/visitor-generator` — ビジター招待文・お礼状ジェネレーター(LINE/メール/SNS/お礼状の4種テンプレートをテンプレートロジックで自動生成、コピーボタン付き。DB非依存)
   - `/portfolio` — 商品・事例ポートフォリオギャラリー(メンバー別フィルター、拡大モーダル表示)
   - `/activity` — 活動タイムライン(メンバー登録・更新、リファーラル追加、1to1実施、ビジター追加の操作履歴を時系列カード表示)
@@ -216,6 +217,12 @@ export async function fetchX(): Promise<X[]> {
 
 型定義・CRUD関数は `src/lib/activityLogs.ts`。`logActivity()` は `members.ts`(`createMember`/`updateMember`)、`referralRequests.ts`(`createReferralRequest`)、`oneOnOnes.ts`(`upsertOneOnOne`)、`visitorInvites.ts`(`createVisitorInvite`)の各成功パスの最後で呼び出される。**`logActivity`自身は内部で例外を握りつぶし、ログ記録の失敗が本来の操作(メンバー保存等)を妨げないようにしている**(呼び出し側でtry/catchする必要はない)。エラー時・未設定時は黙ってlocalStorageへフォールバックする。ローカルフォールバック時は肥大化防止のため直近200件のみ保持する。
 
+### `shared_teams`(外部共有チームページ /team/[id] 用)
+
+`id`(uuid, PK) `name`(共有ページに表示するチーム名、not null) `member_ids`(uuid配列、共有対象メンバーのID。`/team/[id]`での表示順もこの配列順に従う) `created_at`
+
+型定義・CRUD関数は `src/lib/sharedTeams.ts`(`createSharedTeam` / `fetchSharedTeamById` の2関数のみ。一覧取得・更新・削除は現状要件になく未実装)。他のエンティティと異なり**エラーを画面に伝播させる標準パターン**(上記「PostgrestError対策」の例外リストには含めない)を採用している。理由: 共有URL発行が失敗した場合にそれをユーザーに気づかせず「発行できたように見えて実際は保存されていない」状態を避けたいため。Supabase未設定時は他のエンティティ同様localStorage(`bni-dummy-shared-teams-v1`)にフォールバックする。
+
 ### Storageバケット(すべてpublic)
 
 - `member-photos` — 顔写真(アイコン/バストアップ)
@@ -251,11 +258,22 @@ export async function fetchX(): Promise<X[]> {
 - **安全フォールバック**: 各テーブルの復元は`restoreX`関数(各lib内、例: `members.ts`の`restoreMembers`)が担い、内部で`backupHelpers.ts`の`upsertManyWithColumnFallback`を使う。1レコードごとにid基準でupsertし、未マイグレーション列があれば1番のパターンと同様その列だけ除いて再試行、それでも失敗したレコードは`failed`カウントに積んでスキップする(全体を止めない)。Supabase未設定時は各エンティティのlocalStorageダミーストアへidベースでマージする(`fetchX`のダミーストアと同じ実体)。
 - `/admin`画面は復元前に「IDが一致する既存データは上書きされる」旨を`window.confirm`で警告し、復元後はテーブルごとの成功・失敗件数を表で表示する。
 
+## 外部共有チームページ機能(設計判断)
+
+`src/lib/sharedTeams.ts`(`shared_teams`テーブル)+ `/members` の選択UI + `src/components/ShareTeamModal.tsx` + `/team/[id]`(`src/app/team/[id]/page.tsx`)で構成する。BNIメンバーが外部の営業先へ、チャプター内の特定メンバー(例: 建築チームのみ)だけを紹介したい場合に使う。
+
+- **`/members` での選択・発行UI**: `MemberCard`/`SortableMemberCard`に`selectable`/`selected`/`onToggleSelect`の3propsを追加し、`/members`画面からのみチェックボックスを表示する(他画面・`/team/[id]`では`selectable`を渡さないため非表示のまま)。1人以上選択すると画面下部にフローティングバー(選択人数 + 「外部共有URLを作成」ボタン + 「選択解除」ボタン)が現れる。「外部共有URLを作成」から`ShareTeamModal`を開き、チーム名を入力すると`createSharedTeam({ name, member_ids })`で`shared_teams`に1行作成し、`/team/[id]`の絶対URLをクリップボードへ自動コピーしつつ画面にも表示する(`navigator.clipboard`が使えない環境向けに`CopyTextButton`での再コピーも用意)。
+- **`/team/[id]`は完全に閲覧専用**: `fetchSharedTeamById`でチーム名・`member_ids`を取得し、`fetchMembers()`の全件から`member_ids`の順序通りに絞り込んで`MemberCard`を並べる。`MemberCard`へは`onEdit`/`onDelete`を渡さない(両propsは元々optionalで、渡さなければボタン自体が描画されない設計を流用しているだけで、この画面専用の分岐は追加していない)。`onDetail`は詳細確認用に残しており、`MemberDetailModal`自体にも編集・削除機能は無い。
+- **ヘッダーのクリーン化**: `NavHeader.tsx`が`usePathname()`で`/team/`配下かどうかを判定し(`isPublicShare`)、該当する場合はナビゲーションメニュー(`NAV_ITEMS`)とテーマ/文字サイズ切替を丸ごと非表示にする。アプリ名タイトルのみ残る「クリーンな閲覧専用ヘッダー」になる。`layout.tsx`自体は変更していない(`NavHeader`側の条件分岐だけで完結する設計)。
+- **`shared_teams`のエラー方針は他の「外部共有系」テーブルと異なり例外扱いにしていない**(上記「PostgrestError対策」4番の例外リストに含めていない)。共有URL発行に失敗したことに気づかず後で「営業先に送ったURLが実は存在しない」事態を避けるため、`createSharedTeam`は素朴に`throw`し、`ShareTeamModal`がエラーメッセージをフォームに表示する。
+- 一覧取得・チーム名編集・メンバー入れ替え・削除のUIは現状の要件にないため未実装(`sharedTeams.ts`は`createSharedTeam`/`fetchSharedTeamById`の2関数のみ)。将来的に共有チームの一覧管理が必要になった場合は`fetchSharedTeams`等を追加すること。
+
 ## 実装済み機能
 
 - **メンバー管理**(`/members`): 一覧(カード表示/サークルマップ表示の切り替え、並び替え: 登録日順/五十音順/チーム順/手動ドラッグ&ドロップ)、追加・編集フォーム(基本情報/メンバー略歴/G.A.I.N.S.のタブ切り替え)、詳細モーダル(全項目表示、金銀銅リファーラルは色付きバッジ、「紹介文」表記)、顔写真の真下にQRコード画像を常時直接表示(スキャン可能なPNG、`show_qr_code` ON時のみ)、1to1プロファイルシートPDF自動生成出力(詳細モーダルから)、1to1シートのPDF/画像添付・外部URL登録(両方登録可、カード・詳細モーダルの両方から開く)、メンバー略歴シート/G.A.I.N.S.ワークシートのプレビューモーダル+PDF出力ボタン(カード・詳細モーダルの両方に配置、`MemberWorksheetModal` が`BioSheetDocument`/`GainsWorksheetDocument`を切り替えて生成)、全メンバーリストA4 PDF出力ボタン(ヘッダー、`MemberListDocument` を再利用)
   - **サークルマップ表示**: `src/lib/memberPowerTeams.ts` の対応表でメンバーをパワーチーム別にグループ化し、各チームの所属人数・所属メンバー・空きカテゴリー(「募集中」)を可視化する(`src/components/PowerTeamCircleMap.tsx`)。`/matrix` のコンタクトサークルマップとは別軸の分類(業種カテゴリ→パワーチーム)である点に注意。
   - **検索・タグフィルター**: 氏名/フリガナ/会社名のテキスト検索に加え、「欲しいリファーラルあり」「金/銀/銅バッジ」「パワーチーム」タグをワンタップでON/OFFできる絞り込みバー。カード表示・サークルマップ表示の両方に適用される。
+  - **外部共有チームページ発行**: メンバーカードのチェックボックスで複数選択すると画面下部に「〇人選択中:外部共有URLを作成」のフローティングバーが表示され、チーム名を入力するだけで`/team/[id]`の閲覧専用URLを発行・クリップボードコピーできる。詳細は「外部共有チームページ機能(設計判断)」の節を参照。
 - **グループ編成**(`/groups`): メンバーをドラッグ&ドロップで複数グループに割り当て、パターン(編成案)として複数保存・複製、代理参加者バッジの追加
 - **コンタクトサークルマップ**(`/matrix`): 業種カテゴリをコンタクトサークル(建築/美容健康/経営者サポート/不動産資産/ITクリエイティブ/その他)ごとに分類し、空席カテゴリを「絶賛募集中」で可視化
 - **PDF出力**(`/pdf`): メンバーリストPDF(QRコード付き)、グループ配置PDF。プレビュー付きダウンロード
