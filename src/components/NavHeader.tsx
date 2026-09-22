@@ -40,10 +40,24 @@ const NAV_ITEMS = [
   { href: "/about", label: "概要・ガイド", icon: Info },
 ];
 
+/**
+ * 内部向けナビゲーションを一切出さない「外部公開ページ」のパスプレフィックス。
+ * /team/[id]: 外部営業先に共有する閲覧専用チームページ
+ * /m/[id]: メンバー個人のデジタル名刺ページ(QRコード・共有URLの遷移先)
+ * どちらも社外の第三者が直接開く可能性があるURLのため、ここで一元的に判定する。
+ * /team/[id] のメンバーカードはQRコード経由でこの /m/[id] へ遷移できるため、
+ * /m/[id] 側でもナビゲーションを隠さないと迂回で管理メニューが露出してしまう。
+ */
+const PUBLIC_VIEW_PATH_PREFIXES = ["/team/", "/m/"];
+
+function isPublicViewPath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return PUBLIC_VIEW_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
 export default function NavHeader() {
   const pathname = usePathname();
-  // /team/[id] は外部営業先に共有する閲覧専用ページのため、内部向けナビゲーションを一切出さない
-  const isPublicShare = pathname?.startsWith("/team/");
+  const isPublicShare = isPublicViewPath(pathname);
 
   return (
     <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-black/90">
