@@ -44,6 +44,16 @@ export interface Member {
   line_url: string;
   instagram_url: string;
   facebook_url: string;
+  /** ビジネス・営業リンク: ChatworkのURLまたはID */
+  chatwork_url: string;
+  /** ビジネス・営業リンク: LinkedInプロフィールURL */
+  linkedin_url: string;
+  /** ビジネス・営業リンク: Facebook MessengerのURL */
+  messenger_url: string;
+  /** ビジネス・営業リンク: 日程調整用URL(Calendly, TimeRex等) */
+  scheduling_url: string;
+  /** ビジネス・営業リンク: YouTube動画URL */
+  youtube_url: string;
   /** ONの場合のみ、まとめページ(/m/[id])へのQRコードを表示する。デフォルトはOFF。 */
   show_qr_code: boolean;
   /** 添付資料(PDF等)の公開URL */
@@ -114,6 +124,11 @@ export interface MemberInput {
   line_url: string;
   instagram_url: string;
   facebook_url: string;
+  chatwork_url: string;
+  linkedin_url: string;
+  messenger_url: string;
+  scheduling_url: string;
+  youtube_url: string;
   show_qr_code: boolean;
   one_to_one_sheet_url: string;
   bio_past_occupation: string;
@@ -174,6 +189,11 @@ const NEW_OPTIONAL_FIELD_DEFAULTS = {
   one_to_one_attachment_url: "",
   one_to_one_attachment_name: "",
   one_to_one_sheet_url: "",
+  chatwork_url: "",
+  linkedin_url: "",
+  messenger_url: "",
+  scheduling_url: "",
+  youtube_url: "",
   bio_past_occupation: "",
   bio_spouse: "",
   bio_family: "",
@@ -476,6 +496,75 @@ function mergeBioGainsCache(member: Member): Member {
 }
 
 /**
+ * ビジネス・営業リンク5項目(Chatwork/LinkedIn/Messenger/日程調整/YouTube)専用のローカルキャッシュ。
+ * BIO_GAINS_CACHE_KEYと同じ「未マイグレーション列を補うための保険」の仕組みを別キーで踏襲する
+ * (bio/gains用のキャッシュと意味的に別物のため、キーもバージョンも独立させている)。
+ * Facebook(facebook_url)・自社サイト(hp_url)は既存の既存マイグレーション済み列を再利用しており、
+ * 新設列ではないためこのキャッシュの対象外(normalizeMemberの`?? ""`で十分)。
+ */
+const SOCIAL_LINK_FIELD_KEYS = [
+  "chatwork_url",
+  "linkedin_url",
+  "messenger_url",
+  "scheduling_url",
+  "youtube_url",
+] as const;
+type SocialLinkFieldKey = (typeof SOCIAL_LINK_FIELD_KEYS)[number];
+type SocialLinkFields = Record<SocialLinkFieldKey, string>;
+
+const SOCIAL_LINKS_CACHE_KEY = "bni-member-social-links-cache-v1";
+
+function loadSocialLinksCache(): Record<string, Partial<SocialLinkFields>> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(SOCIAL_LINKS_CACHE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveSocialLinksCache(cache: Record<string, Partial<SocialLinkFields>>): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SOCIAL_LINKS_CACHE_KEY, JSON.stringify(cache));
+}
+
+function cacheSocialLinksFields(id: string, input: MemberInput): void {
+  const cache = loadSocialLinksCache();
+  const entry: Partial<SocialLinkFields> = {};
+  for (const key of SOCIAL_LINK_FIELD_KEYS) {
+    entry[key] = input[key];
+  }
+  cache[id] = entry;
+  saveSocialLinksCache(cache);
+}
+
+function mergeSocialLinksCache(member: Member): Member {
+  const cache = loadSocialLinksCache();
+  const cached = { ...(cache[member.id] ?? {}) };
+  const merged: Member = { ...member };
+  let cacheChanged = false;
+
+  for (const key of SOCIAL_LINK_FIELD_KEYS) {
+    const liveValue = member[key];
+    if (liveValue) {
+      if (cached[key] !== liveValue) {
+        cached[key] = liveValue;
+        cacheChanged = true;
+      }
+    } else if (cached[key]) {
+      merged[key] = cached[key];
+    }
+  }
+
+  if (cacheChanged) {
+    cache[member.id] = cached;
+    saveSocialLinksCache(cache);
+  }
+
+  return merged;
+}
+
+/**
  * 過去バージョンで保存されたデータ(gold/silver/bronze_referral未対応)や、
  * DBのnull値を安全に補完する。既存データとの互換性維持のためのフォールバック。
  */
@@ -507,8 +596,13 @@ function normalizeMember(member: Member): Member {
     gains_interests: member.gains_interests ?? "",
     gains_networks: member.gains_networks ?? "",
     gains_skills: member.gains_skills ?? "",
+    chatwork_url: member.chatwork_url ?? "",
+    linkedin_url: member.linkedin_url ?? "",
+    messenger_url: member.messenger_url ?? "",
+    scheduling_url: member.scheduling_url ?? "",
+    youtube_url: member.youtube_url ?? "",
   };
-  return mergeBioGainsCache(withDefaults);
+  return mergeSocialLinksCache(mergeBioGainsCache(withDefaults));
 }
 
 function loadDummyMembers(): Member[] {
@@ -747,6 +841,7 @@ export async function createMember(
   // Supabase側の実際の保存可否によらず、入力値をローカルキャッシュへ先に反映しておく
   // (未マイグレーション環境で列が除外されても、画面上は入力内容が消えないようにするため)。
   cacheBioGainsFields(id, input);
+  cacheSocialLinksFields(id, input);
 
   let created: Member;
   if (supabase) {
@@ -837,6 +932,7 @@ export async function updateMember(
   // Supabase側の実際の保存可否によらず、入力値をローカルキャッシュへ先に反映しておく
   // (未マイグレーション環境で列が除外されても、画面上は入力内容が消えないようにするため)。
   cacheBioGainsFields(id, input);
+  cacheSocialLinksFields(id, input);
 
   let updated: Member;
   if (supabase) {

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { IdCard, MessageCircle, Camera, Users, QrCode } from "lucide-react";
+import { IdCard, MessageCircle, Camera, QrCode } from "lucide-react";
 import { fetchMemberById, type Member } from "@/lib/members";
 import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
 import { getCategoryColor } from "@/lib/categoryColors";
+import { getBusinessLinks } from "@/lib/businessLinks";
 
 export default function MemberProfilePage() {
   const params = useParams<{ id: string }>();
@@ -112,14 +113,18 @@ export default function MemberProfilePage() {
             className="bg-gradient-to-r from-[#f58529] via-[#dd2a7b] to-[#8134af] text-white hover:opacity-90"
           />
         )}
-        {member.facebook_url && (
-          <ProfileLinkButton
-            href={member.facebook_url}
-            icon={<Users size={18} />}
-            label="Facebookでつながる"
-            className="bg-[#1877F2] text-white hover:opacity-90"
-          />
-        )}
+        {getBusinessLinks(member).map((link) => {
+          const Icon = link.icon;
+          return (
+            <ProfileLinkButton
+              key={link.key}
+              href={link.url}
+              icon={<Icon size={18} />}
+              label={link.label}
+              className={`${link.colorClassName} hover:opacity-90`}
+            />
+          );
+        })}
       </div>
 
       {member.show_qr_code && qrUrl && (

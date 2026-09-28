@@ -130,6 +130,10 @@ export async function fetchX(): Promise<X[]> {
 
 **G.A.I.N.S.ワークシート用フィールド**(すべてtext): `gains_goals`(Goals/目標) `gains_accomplishments`(Accomplishments/実績) `gains_interests`(Interests/興味) `gains_networks`(Networks/人脈) `gains_skills`(Skills/スキル)
 
+**ビジネス・営業リンク7項目**(すべてtext、空文字許容): `chatwork_url`(ChatworkのURLまたはID) `linkedin_url`(LinkedInプロフィールURL) `messenger_url`(Facebook MessengerのURL) `scheduling_url`(日程調整用URL、Calendly/TimeRex等) `youtube_url`(YouTube動画URL)。**Facebook・自社サイトURLは新規カラムを追加せず、既存の`facebook_url`・`hp_url`をそのまま再利用している**(「要件文書に出てくる名前が既存カラムと同じ意味なら既存カラムを優先する」という上記方針の適用例。フォーム上もFacebook URL/HPリンクの入力欄は1箇所のみで、ビジネス・営業リンクの節では触れずに済ませている)。
+表示側(`src/lib/businessLinks.ts`の`getBusinessLinks()`)がこの7項目(`chatwork_url` `facebook_url` `linkedin_url` `messenger_url` `hp_url` `scheduling_url` `youtube_url`)のうち値が入っているものだけをブランドカラー付きボタン定義として返し、`src/components/BusinessLinkButtons.tsx`(メンバー詳細モーダル・メンバーカード=`/members`一覧と`/team/[id]`外部共有ページ)と`/m/[id]`(デジタル名刺ページ、`ProfileLinkButton`で直接マッピング)の両方から共通利用する。**lucide-reactはFacebook/LinkedIn/YouTube等のブランドロゴアイコンを提供しないため、意味の近い汎用アイコン(Users/Briefcase/Video等)+ ブランドカラーの背景色で代替している**(以前からある`/m/[id]`のLINE/Instagram/Facebookボタンと同じ方針を踏襲)。
+`chatwork_url`〜`youtube_url`の5つの新設カラムは、bio/gains用の仕組み(`BIO_GAINS_CACHE_KEY`)と全く同じ「未マイグレーション列を補うローカルキャッシュ」パターンを`bni-member-social-links-cache-v1`という別キーで独立して持つ(`members.ts`の`SOCIAL_LINK_FIELD_KEYS`/`cacheSocialLinksFields`/`mergeSocialLinksCache`)。既存カラムを再利用した`facebook_url`・`hp_url`は元々マイグレーション済みのため、このキャッシュの対象に含めていない。
+
 型定義は `src/lib/members.ts` の `Member` / `MemberInput`。**要件文書などでカラム名として `chapter_name` `position` `phone` `website_url` `desired_referrals` のような別名が出てきても、既存のDBカラム名(`chapter` `role` `contact` `hp_url` `wanted_referral`)を優先しリネームしない**(過去の指示で明示的にこの方針を採用済み。互換性維持のため)。同様に、UI表記を「コメント」から「紹介文」に変更した際もDBカラム名`comment`は変更していない。
 
 ### `teams`(チーム/委員会マスタ)
@@ -276,6 +280,7 @@ export async function fetchX(): Promise<X[]> {
   - **サークルマップ表示**: `src/lib/memberPowerTeams.ts` の対応表でメンバーをパワーチーム別にグループ化し、各チームの所属人数・所属メンバー・空きカテゴリー(「募集中」)を可視化する(`src/components/PowerTeamCircleMap.tsx`)。`/matrix` のコンタクトサークルマップとは別軸の分類(業種カテゴリ→パワーチーム)である点に注意。
   - **検索・タグフィルター**: 氏名/フリガナ/会社名のテキスト検索に加え、「欲しいリファーラルあり」「金/銀/銅バッジ」「パワーチーム」タグをワンタップでON/OFFできる絞り込みバー。カード表示・サークルマップ表示の両方に適用される。
   - **外部共有チームページ発行**: メンバーカードのチェックボックスで複数選択すると画面下部に「〇人選択中:外部共有URLを作成」のフローティングバーが表示され、チーム名を入力するだけで`/team/[id]`の閲覧専用URLを発行・クリップボードコピーできる。詳細は「外部共有チームページ機能(設計判断)」の節を参照。
+  - **ビジネス・営業リンクの動的ボタン表示**: Chatwork/Facebook/LinkedIn/Messenger/自社サイト/日程調整/YouTubeの7項目のうち入力済みのものだけを、メンバーカード・メンバー詳細モーダル・デジタル名刺(`/m/[id]`)・外部共有チームページ(`/team/[id]`)でブランドカラー付きのワンタップ遷移ボタンとして表示する。詳細は「Supabaseスキーマ概要」内`members`の「ビジネス・営業リンク7項目」を参照。
 - **グループ編成**(`/groups`): メンバーをドラッグ&ドロップで複数グループに割り当て、パターン(編成案)として複数保存・複製、代理参加者バッジの追加
 - **コンタクトサークルマップ**(`/matrix`): 業種カテゴリをコンタクトサークル(建築/美容健康/経営者サポート/不動産資産/ITクリエイティブ/その他)ごとに分類し、空席カテゴリを「絶賛募集中」で可視化
 - **PDF出力**(`/pdf`): メンバーリストPDF(QRコード付き)、グループ配置PDF。プレビュー付きダウンロード
@@ -296,7 +301,7 @@ export async function fetchX(): Promise<X[]> {
 - **活動タイムライン**(`/activity`): メンバー登録・更新、リファーラル追加、1to1実施、ビジター追加の操作履歴を新しい順のカードで表示。種別タブで絞り込み可能。ログ自体は各操作の成功時に自動記録される(下記「`activity_logs`」参照)。
 - **ターゲット紹介文AI自動補正**(`/referrals` の登録・編集フォーム内): 「詳細説明」欄に「AI自動補正」ボタンを設置。`src/lib/referralPolish.ts`の`polishReferralDescription()`が、「誰か紹介して」等の曖昧な入力や短すぎる入力を検出し、募集カテゴリ・対象パワーチームの入力値を使って「○○業界で△△にお悩みの経営者様」形式の具体的なターゲット文面へテンプレートロジックで変換する(外部AI APIは呼び出さない)。
 - **全データバックアップ・復元**(`/admin`): members / referral_requests / one_on_ones / visitor_invites / library_links / portfolios の全件を1つのJSONファイルとしてエクスポート/インポートする。詳細は「全データバックアップ・復元機能(設計判断)」の節を参照。
-- **メンバーCSVインポート/エクスポート**(`/members` ヘッダー): 「CSV出力」ボタンで全メンバー情報(写真・添付ファイルURLを除く40列、UTF-8 BOM付き)をダウンロードし、「CSVインポート」ボタンでCSVファイルから一括登録・更新する。詳細は`src/lib/membersCsv.ts`のJSDocおよび下記参照。
+- **メンバーCSVインポート/エクスポート**(`/members` ヘッダー): 「CSV出力」ボタンで全メンバー情報(写真・添付ファイルURLを除く45列、UTF-8 BOM付き)をダウンロードし、「CSVインポート」ボタンでCSVファイルから一括登録・更新する。詳細は`src/lib/membersCsv.ts`のJSDocおよび下記参照。
 
 ## 開発上の注意点
 
@@ -310,6 +315,7 @@ export async function fetchX(): Promise<X[]> {
 
 ## 開発経緯(主なコミット、直近が上)
 
+1. `Add 7 business social links (Chatwork, FB, LinkedIn, Messenger, Website, Scheduling, YouTube) to members with CLAUDE.md update` — メンバーにビジネス・営業リンク7項目(Chatwork/Facebook/LinkedIn/Messenger/自社サイト/日程調整/YouTube)を追加。うちFacebook・自社サイトは既存の`facebook_url`・`hp_url`を再利用し、新設5項目には`bni-member-social-links-cache-v1`によるローカルキャッシュ保護を適用。メンバーカード・詳細モーダル・デジタル名刺・外部共有チームページに動的なブランドカラーボタンを表示
 1. `Implement PWA, visitor generator, backup/restore, activity timeline, portfolio, target AI polisher, font size toggle, and CSV import/export with CLAUDE.md update` — PWA対応(manifest.json/アイコン)、ビジター招待文・お礼状ジェネレーター(`/visitor-generator`)、全データバックアップ・復元(`/admin`)、活動タイムライン(`/activity`、`activity_logs`テーブル)、商品・事例ポートフォリオ(`/portfolio`、`portfolios`テーブル)、リファーラル詳細説明のAI自動補正、文字サイズ切替(標準/大/特大)、メンバーCSVインポート/エクスポートの8機能を追加
 1. `Fix member bio and GAINS data persistence and state binding issue`
 1. `Add list view and dynamic major categories management to library with CLAUDE.md update` — 資料ライブラリにカード/リスト表示切り替え、`library_categories`マスタによる大分類の動的CRUD管理(`LibraryCategoryManageModal`)、大分類フィルタータブ、`library_links.updated_at`を追加

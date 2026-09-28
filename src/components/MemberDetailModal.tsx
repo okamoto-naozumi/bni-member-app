@@ -11,6 +11,8 @@ import OneToOneSheetDocument from "@/lib/pdf/OneToOneSheetDocument";
 import { getErrorMessage } from "@/lib/errorMessage";
 import ShareButtons from "@/components/ShareButtons";
 import MemberWorksheetModal from "@/components/MemberWorksheetModal";
+import BusinessLinkButtons from "@/components/BusinessLinkButtons";
+import { getBusinessLinks } from "@/lib/businessLinks";
 
 export default function MemberDetailModal({
   member,
@@ -180,6 +182,12 @@ export default function MemberDetailModal({
             </DetailRow>
           )}
         </dl>
+
+        {getBusinessLinks(member).length > 0 && (
+          <div className="mt-4">
+            <BusinessLinkButtons member={member} size="md" />
+          </div>
+        )}
 
         {member.wanted_referral && (
           <div className="mt-4">

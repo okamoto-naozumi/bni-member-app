@@ -1,7 +1,7 @@
 import { createMember, updateMember, type CustomField, type Member, type MemberInput } from "@/lib/members";
 
 /**
- * 40列構成のCSVフォーマット。写真・添付ファイル(photo_icon_url等)はURLが長大かつ
+ * 45列構成のCSVフォーマット。写真・添付ファイル(photo_icon_url等)はURLが長大かつ
  * バイナリアップロード由来のためCSVでの往復編集に向かず、対象外としている
  * (これらは既存メンバーであれば更新時にそのまま維持される)。
  */
@@ -26,6 +26,11 @@ export const CSV_HEADERS = [
   "LINE URL",
   "Instagram URL",
   "Facebook URL",
+  "Chatwork",
+  "LinkedIn URL",
+  "Messenger URL",
+  "日程調整URL",
+  "YouTube URL",
   "QRコード表示",
   "1to1シートURL",
   "過去に経験した職業",
@@ -78,6 +83,11 @@ export function serializeMembersCsv(members: Member[]): string {
       m.line_url,
       m.instagram_url,
       m.facebook_url,
+      m.chatwork_url,
+      m.linkedin_url,
+      m.messenger_url,
+      m.scheduling_url,
+      m.youtube_url,
       m.show_qr_code ? "TRUE" : "FALSE",
       m.one_to_one_sheet_url,
       m.bio_past_occupation,
@@ -186,6 +196,11 @@ function rowToMemberInput(row: string[]): { id: string; input: MemberInput } {
     line_url = "",
     instagram_url = "",
     facebook_url = "",
+    chatwork_url = "",
+    linkedin_url = "",
+    messenger_url = "",
+    scheduling_url = "",
+    youtube_url = "",
     show_qr_code = "",
     one_to_one_sheet_url = "",
     bio_past_occupation = "",
@@ -231,6 +246,11 @@ function rowToMemberInput(row: string[]): { id: string; input: MemberInput } {
       line_url: line_url.trim(),
       instagram_url: instagram_url.trim(),
       facebook_url: facebook_url.trim(),
+      chatwork_url: chatwork_url.trim(),
+      linkedin_url: linkedin_url.trim(),
+      messenger_url: messenger_url.trim(),
+      scheduling_url: scheduling_url.trim(),
+      youtube_url: youtube_url.trim(),
       show_qr_code: /^(true|1|yes|on)$/i.test(show_qr_code.trim()),
       one_to_one_sheet_url: one_to_one_sheet_url.trim(),
       bio_past_occupation: bio_past_occupation.trim(),

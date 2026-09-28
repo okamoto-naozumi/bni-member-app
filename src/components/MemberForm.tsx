@@ -44,6 +44,11 @@ const EMPTY_INPUT: MemberInput = {
   line_url: "",
   instagram_url: "",
   facebook_url: "",
+  chatwork_url: "",
+  linkedin_url: "",
+  messenger_url: "",
+  scheduling_url: "",
+  youtube_url: "",
   show_qr_code: false,
   one_to_one_sheet_url: "",
   bio_past_occupation: "",
@@ -150,6 +155,11 @@ export default function MemberForm({
           line_url: initial.line_url,
           instagram_url: initial.instagram_url,
           facebook_url: initial.facebook_url,
+          chatwork_url: initial.chatwork_url,
+          linkedin_url: initial.linkedin_url,
+          messenger_url: initial.messenger_url,
+          scheduling_url: initial.scheduling_url,
+          youtube_url: initial.youtube_url,
           show_qr_code: initial.show_qr_code,
           one_to_one_sheet_url: initial.one_to_one_sheet_url,
           bio_past_occupation: initial.bio_past_occupation,
@@ -790,6 +800,61 @@ export default function MemberForm({
           <p className="mt-2 text-xs text-zinc-500">
             QRコードは、これらのリンクをまとめたデジタル名刺ページ(/m/{"{id}"})を開くQRコードとして自動生成されます。
           </p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <span className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            ビジネス・営業リンク
+          </span>
+          <p className="mb-3 text-xs text-zinc-500">
+            入力した項目のみ、メンバー詳細・デジタル名刺・外部共有ページにワンタップ遷移ボタンとして表示されます。Facebook・自社サイトURLは上記の項目と共通です。
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Chatwork(URLまたはID)">
+              <input
+                value={input.chatwork_url}
+                onChange={(e) => setInput({ ...input, chatwork_url: e.target.value })}
+                className="input"
+                placeholder="https://www.chatwork.com/... または ID"
+              />
+            </Field>
+            <Field label="LinkedIn URL">
+              <input
+                type="url"
+                value={input.linkedin_url}
+                onChange={(e) => setInput({ ...input, linkedin_url: e.target.value })}
+                className="input"
+                placeholder="https://www.linkedin.com/in/..."
+              />
+            </Field>
+            <Field label="Facebook Messenger URL">
+              <input
+                type="url"
+                value={input.messenger_url}
+                onChange={(e) => setInput({ ...input, messenger_url: e.target.value })}
+                className="input"
+                placeholder="https://m.me/..."
+              />
+            </Field>
+            <Field label="日程調整用URL(Calendly, TimeRex等)">
+              <input
+                type="url"
+                value={input.scheduling_url}
+                onChange={(e) => setInput({ ...input, scheduling_url: e.target.value })}
+                className="input"
+                placeholder="https://calendly.com/..."
+              />
+            </Field>
+            <Field label="YouTube動画URL">
+              <input
+                type="url"
+                value={input.youtube_url}
+                onChange={(e) => setInput({ ...input, youtube_url: e.target.value })}
+                className="input"
+                placeholder="https://www.youtube.com/..."
+              />
+            </Field>
+          </div>
         </div>
         </div>
 

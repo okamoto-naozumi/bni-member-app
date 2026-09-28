@@ -6,6 +6,8 @@ import { BookUser, ClipboardList, ExternalLink, FileText, Info, Pencil, Trash2 }
 import type { Member } from "@/lib/members";
 import ShareButtons from "@/components/ShareButtons";
 import MemberWorksheetModal from "@/components/MemberWorksheetModal";
+import BusinessLinkButtons from "@/components/BusinessLinkButtons";
+import { getBusinessLinks } from "@/lib/businessLinks";
 
 export default function MemberCard({
   member,
@@ -226,6 +228,12 @@ export default function MemberCard({
                 1to1シートURL
               </a>
             )}
+          </div>
+        )}
+
+        {getBusinessLinks(member).length > 0 && (
+          <div className="mt-2">
+            <BusinessLinkButtons member={member} />
           </div>
         )}
 
