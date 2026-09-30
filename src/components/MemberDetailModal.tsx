@@ -272,19 +272,22 @@ export default function MemberDetailModal({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-24 sm:p-6 md:pb-6">
-          {sheetError && (
-            <p className="mb-3 text-xs text-red-600 dark:text-red-400">{sheetError}</p>
-          )}
-
-          {/* ヘッダーセクション(写真をカバー画像に少し重ねて配置) */}
-          <div className="-mt-14 mb-4 flex flex-col gap-4 sm:-mt-20 sm:flex-row sm:items-end">
-            <div className="relative shrink-0">
+        {/*
+          ヘッダー情報(アバター・氏名等)はカバー画像と同じくスクロールしない領域に配置する。
+          以前はこのブロックをスクロール領域(overflow-y-auto)の先頭で負のmargin-topを使って
+          カバー画像に重ねていたが、overflow-y-autoコンテナの外側にはみ出す負マージンは
+          スクロール領域の境界でクリップされてしまい、アバター上部(頭頂部)が見切れる不具合の原因になっていた。
+          アバターをスクロールしない(shrink-0の)このブロック側にabsolute配置で重ねることで、
+          スクロールコンテナの境界に一切依存せずに全体を表示できるようにしている。
+        */}
+        <div className="relative shrink-0 px-4 pb-4 pt-16 sm:px-6 sm:pb-5 sm:pt-20">
+          <div className="absolute -top-12 left-4 z-10 sm:-top-14 sm:left-6">
+            <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element -- photo_icon_url may be a data URL or arbitrary remote host */}
               <img
                 src={member.photo_icon_url}
                 alt={member.name}
-                className="h-24 w-24 rounded-full object-cover shadow-lg ring-4 ring-zinc-100 sm:h-28 sm:w-28 dark:ring-zinc-950"
+                className="h-24 w-24 rounded-full object-cover object-top shadow-lg ring-4 ring-zinc-100 sm:h-28 sm:w-28 dark:ring-zinc-950"
               />
               {member.show_qr_code && (
                 <button
@@ -297,41 +300,48 @@ export default function MemberDetailModal({
                 </button>
               )}
             </div>
-            <div className="min-w-0 flex-1 pb-1">
-              <div className="flex flex-wrap items-baseline gap-x-2">
-                <h3 className="truncate text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-                  {member.name}
-                </h3>
-                {member.name_kana && (
-                  <span className="truncate text-sm text-zinc-500 dark:text-zinc-400">
-                    {member.name_kana}
-                  </span>
-                )}
-              </div>
-              {(member.chapter || member.role) && (
-                <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
-                  {[member.chapter, member.role].filter(Boolean).join(" / ")}
-                </p>
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h3 className="truncate text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                {member.name}
+              </h3>
+              {member.name_kana && (
+                <span className="truncate text-sm text-zinc-500 dark:text-zinc-400">
+                  {member.name_kana}
+                </span>
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {member.category && (
-                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                    {member.category}
-                  </span>
-                )}
-                {member.team && (
-                  <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-                    {member.team}
-                  </span>
-                )}
-                {member.company && (
-                  <span className="text-sm text-zinc-600 dark:text-zinc-300">
-                    {member.company}
-                  </span>
-                )}
-              </div>
+            </div>
+            {(member.chapter || member.role) && (
+              <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                {[member.chapter, member.role].filter(Boolean).join(" / ")}
+              </p>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {member.category && (
+                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  {member.category}
+                </span>
+              )}
+              {member.team && (
+                <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                  {member.team}
+                </span>
+              )}
+              {member.company && (
+                <span className="text-sm text-zinc-600 dark:text-zinc-300">
+                  {member.company}
+                </span>
+              )}
             </div>
           </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-0 pb-24 sm:p-6 sm:pt-0 md:pb-6">
+          {sheetError && (
+            <p className="mb-3 text-xs text-red-600 dark:text-red-400">{sheetError}</p>
+          )}
 
           <Card className="mb-4">
             {getBusinessLinks(member).length > 0 && (
