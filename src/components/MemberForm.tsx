@@ -44,6 +44,7 @@ const EMPTY_INPUT: MemberInput = {
   line_url: "",
   instagram_url: "",
   facebook_url: "",
+  cover_image_url: "",
   chatwork_url: "",
   linkedin_url: "",
   messenger_url: "",
@@ -155,6 +156,7 @@ export default function MemberForm({
           line_url: initial.line_url,
           instagram_url: initial.instagram_url,
           facebook_url: initial.facebook_url,
+          cover_image_url: initial.cover_image_url,
           chatwork_url: initial.chatwork_url,
           linkedin_url: initial.linkedin_url,
           messenger_url: initial.messenger_url,
@@ -525,6 +527,15 @@ export default function MemberForm({
               onChange={(e) => setInput({ ...input, hp_url: e.target.value })}
               className="input"
               placeholder="https://example.com"
+            />
+          </Field>
+          <Field label="カバー画像URL(1to1シート上部のバナー画像)">
+            <input
+              type="url"
+              value={input.cover_image_url}
+              onChange={(e) => setInput({ ...input, cover_image_url: e.target.value })}
+              className="input"
+              placeholder="https://example.com/cover.jpg"
             />
           </Field>
         </div>

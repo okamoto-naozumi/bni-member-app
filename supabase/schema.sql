@@ -61,6 +61,7 @@ alter table public.members add column if not exists gains_accomplishments text;
 alter table public.members add column if not exists gains_interests text;
 alter table public.members add column if not exists gains_networks text;
 alter table public.members add column if not exists gains_skills text;
+alter table public.members add column if not exists cover_image_url text;
 
 alter table public.members enable row level security;
 

@@ -44,6 +44,8 @@ export interface Member {
   line_url: string;
   instagram_url: string;
   facebook_url: string;
+  /** メンバー詳細画面(1to1シート)最上部のカバー画像URL。未設定時はグラデーション背景を表示する */
+  cover_image_url: string;
   /** ビジネス・営業リンク: ChatworkのURLまたはID */
   chatwork_url: string;
   /** ビジネス・営業リンク: LinkedInプロフィールURL */
@@ -124,6 +126,7 @@ export interface MemberInput {
   line_url: string;
   instagram_url: string;
   facebook_url: string;
+  cover_image_url: string;
   chatwork_url: string;
   linkedin_url: string;
   messenger_url: string;
@@ -189,6 +192,7 @@ const NEW_OPTIONAL_FIELD_DEFAULTS = {
   one_to_one_attachment_url: "",
   one_to_one_attachment_name: "",
   one_to_one_sheet_url: "",
+  cover_image_url: "",
   chatwork_url: "",
   linkedin_url: "",
   messenger_url: "",
@@ -565,6 +569,66 @@ function mergeSocialLinksCache(member: Member): Member {
 }
 
 /**
+ * カバー画像URL専用のローカルキャッシュ。BIO_GAINS_CACHE_KEY/SOCIAL_LINKS_CACHE_KEYと
+ * 同じ「未マイグレーション列を補うための保険」の仕組みを別キーで踏襲する(意味的に別物のため独立させている)。
+ */
+const COVER_IMAGE_FIELD_KEYS = ["cover_image_url"] as const;
+type CoverImageFieldKey = (typeof COVER_IMAGE_FIELD_KEYS)[number];
+type CoverImageFields = Record<CoverImageFieldKey, string>;
+
+const COVER_IMAGE_CACHE_KEY = "bni-member-cover-image-cache-v1";
+
+function loadCoverImageCache(): Record<string, Partial<CoverImageFields>> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(COVER_IMAGE_CACHE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveCoverImageCache(cache: Record<string, Partial<CoverImageFields>>): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(COVER_IMAGE_CACHE_KEY, JSON.stringify(cache));
+}
+
+function cacheCoverImageField(id: string, input: MemberInput): void {
+  const cache = loadCoverImageCache();
+  const entry: Partial<CoverImageFields> = {};
+  for (const key of COVER_IMAGE_FIELD_KEYS) {
+    entry[key] = input[key];
+  }
+  cache[id] = entry;
+  saveCoverImageCache(cache);
+}
+
+function mergeCoverImageCache(member: Member): Member {
+  const cache = loadCoverImageCache();
+  const cached = { ...(cache[member.id] ?? {}) };
+  const merged: Member = { ...member };
+  let cacheChanged = false;
+
+  for (const key of COVER_IMAGE_FIELD_KEYS) {
+    const liveValue = member[key];
+    if (liveValue) {
+      if (cached[key] !== liveValue) {
+        cached[key] = liveValue;
+        cacheChanged = true;
+      }
+    } else if (cached[key]) {
+      merged[key] = cached[key];
+    }
+  }
+
+  if (cacheChanged) {
+    cache[member.id] = cached;
+    saveCoverImageCache(cache);
+  }
+
+  return merged;
+}
+
+/**
  * 過去バージョンで保存されたデータ(gold/silver/bronze_referral未対応)や、
  * DBのnull値を安全に補完する。既存データとの互換性維持のためのフォールバック。
  */
@@ -601,8 +665,9 @@ function normalizeMember(member: Member): Member {
     messenger_url: member.messenger_url ?? "",
     scheduling_url: member.scheduling_url ?? "",
     youtube_url: member.youtube_url ?? "",
+    cover_image_url: member.cover_image_url ?? "",
   };
-  return mergeSocialLinksCache(mergeBioGainsCache(withDefaults));
+  return mergeCoverImageCache(mergeSocialLinksCache(mergeBioGainsCache(withDefaults)));
 }
 
 function loadDummyMembers(): Member[] {
@@ -842,6 +907,7 @@ export async function createMember(
   // (未マイグレーション環境で列が除外されても、画面上は入力内容が消えないようにするため)。
   cacheBioGainsFields(id, input);
   cacheSocialLinksFields(id, input);
+  cacheCoverImageField(id, input);
 
   let created: Member;
   if (supabase) {
@@ -933,6 +999,7 @@ export async function updateMember(
   // (未マイグレーション環境で列が除外されても、画面上は入力内容が消えないようにするため)。
   cacheBioGainsFields(id, input);
   cacheSocialLinksFields(id, input);
+  cacheCoverImageField(id, input);
 
   let updated: Member;
   if (supabase) {

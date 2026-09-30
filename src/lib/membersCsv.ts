@@ -246,6 +246,8 @@ function rowToMemberInput(row: string[]): { id: string; input: MemberInput } {
       line_url: line_url.trim(),
       instagram_url: instagram_url.trim(),
       facebook_url: facebook_url.trim(),
+      // CSVフォーマットに列を持たないため既定は空。importMembersFromCsvが更新時に既存値で上書きする。
+      cover_image_url: "",
       chatwork_url: chatwork_url.trim(),
       linkedin_url: linkedin_url.trim(),
       messenger_url: messenger_url.trim(),
@@ -308,6 +310,7 @@ export async function importMembersFromCsv(
 
     const existing = id ? existingById.get(id) : undefined;
     if (existing) {
+      input.cover_image_url = existing.cover_image_url;
       await updateMember(
         existing.id,
         input,
