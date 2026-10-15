@@ -10,9 +10,26 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { pdf } from "@react-pdf/renderer";
-import { Download, FileDown, FileUp, Grid3x3, LayoutGrid, Link2, Search, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  FileDown,
+  FileUp,
+  Grid3x3,
+  LayoutGrid,
+  Link2,
+  RefreshCw,
+  Search,
+  X,
+} from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { deleteMember, fetchMembers, reorderMembers, type Member } from "@/lib/members";
+import {
+  deleteMember,
+  fetchMembers,
+  MemberFetchConnectivityError,
+  reorderMembers,
+  type Member,
+} from "@/lib/members";
 import { getErrorMessage } from "@/lib/errorMessage";
 import { generateQrDataUrl, memberProfileUrl } from "@/lib/qrcode";
 import { registerPdfFonts } from "@/lib/pdf/fonts";
@@ -76,6 +93,7 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [connectivityWarning, setConnectivityWarning] = useState(false);
   const [tab, setTab] = useState<Tab>("list");
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created");
@@ -97,11 +115,25 @@ export default function MembersPage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
   );
 
-  useEffect(() => {
+  function loadMembers() {
+    setLoading(true);
+    setLoadError(null);
+    setConnectivityWarning(false);
     fetchMembers()
       .then(setMembers)
-      .catch((err) => setLoadError(getErrorMessage(err)))
+      .catch((err) => {
+        if (err instanceof MemberFetchConnectivityError) {
+          setConnectivityWarning(true);
+          if (err.cachedMembers) setMembers(err.cachedMembers);
+        } else {
+          setLoadError(getErrorMessage(err));
+        }
+      })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadMembers();
   }, []);
 
   useEffect(() => {
@@ -206,8 +238,16 @@ export default function MembersPage() {
     try {
       const text = await file.text();
       const result = await importMembersFromCsv(text, members);
-      const refreshed = await fetchMembers();
-      setMembers(refreshed);
+      try {
+        setMembers(await fetchMembers());
+      } catch (refreshErr) {
+        if (refreshErr instanceof MemberFetchConnectivityError) {
+          setConnectivityWarning(true);
+          if (refreshErr.cachedMembers) setMembers(refreshErr.cachedMembers);
+        } else {
+          throw refreshErr;
+        }
+      }
       setCsvMessage(
         `CSVインポート完了: 新規${result.created}件 / 更新${result.updated}件 / スキップ${result.skipped}件`
       );
@@ -352,6 +392,23 @@ export default function MembersPage() {
         <PresenterReminderBanner />
       </div>
 
+      {connectivityWarning && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-300">
+          <span className="flex items-center gap-1.5">
+            <AlertTriangle size={14} className="shrink-0" />
+            データベースに接続できませんでした。一時的な通信エラーまたはSupabaseが停止している可能性があります。
+          </span>
+          <button
+            type="button"
+            onClick={loadMembers}
+            className="flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700"
+          >
+            <RefreshCw size={12} />
+            再試行
+          </button>
+        </div>
+      )}
+
       {!isSupabaseConfigured && (
         <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
           Supabase未設定のため、ダミーデータで動作しています(ブラウザのlocalStorageに保存されます)。
@@ -489,7 +546,9 @@ export default function MembersPage() {
               <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>
             ) : members.length === 0 ? (
               <p className="text-sm text-zinc-500">
-                まだメンバーが登録されていません。「追加・編集」タブから登録してください。
+                {connectivityWarning
+                  ? "データベースに接続できず、表示できるキャッシュデータもありません。再試行してください。"
+                  : "まだメンバーが登録されていません。「追加・編集」タブから登録してください。"}
               </p>
             ) : filteredMembers.length === 0 ? (
               <p className="text-sm text-zinc-500">

@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { uploadMemberPhoto } from "@/lib/memberPhotos";
 import { uploadMemberAttachment, uploadOneToOneAttachment } from "@/lib/memberAttachments";
 import { fileToDataUrl } from "@/lib/fileToDataUrl";
-import { extractMissingColumn } from "@/lib/postgrestError";
+import { extractMissingColumn, isNetworkError } from "@/lib/postgrestError";
 import { logActivity } from "@/lib/activityLogs";
 import { upsertManyWithColumnFallback, type RestoreResult } from "@/lib/backupHelpers";
 
@@ -694,17 +694,73 @@ function saveDummyMembers(members: Member[]): void {
   window.localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(members));
 }
 
+// v1: Supabaseからの直近の取得成功結果を保持するキャッシュ。ダミーモード用のDUMMY_STORAGE_KEYとは
+// 別物で、Supabase設定時にネットワーク切断・Supabase Paused等でfetchMembers自体が失敗した際、
+// 画面表示を維持するためのフォールバックとしてのみ使う。
+const MEMBERS_FETCH_CACHE_KEY = "bni-members-fetch-cache-v1";
+
+function loadMembersFetchCache(): Member[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(MEMBERS_FETCH_CACHE_KEY);
+    if (!raw) return null;
+    return (JSON.parse(raw) as Member[]).map(normalizeMember);
+  } catch {
+    return null;
+  }
+}
+
+function saveMembersFetchCache(members: Member[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(MEMBERS_FETCH_CACHE_KEY, JSON.stringify(members));
+  } catch {
+    // 容量超過等は無視してよい(あくまでフォールバック用の保険のため)
+  }
+}
+
+/**
+ * fetchMembersがSupabaseへの接続自体に失敗した(ネットワーク切断・Supabase Paused・CORS等)場合にthrowする。
+ * 呼び出し側はこのエラー型を検知し、cachedMembers(直近の取得成功分。なければnull)で画面表示を維持しつつ、
+ * 生のエラー文字列(TypeError: Failed to fetch等)の代わりに分かりやすい警告バナーを表示する想定。
+ */
+export class MemberFetchConnectivityError extends Error {
+  cachedMembers: Member[] | null;
+  constructor(cachedMembers: Member[] | null) {
+    super(
+      "データベースに接続できませんでした。一時的な通信エラーまたはSupabaseが停止している可能性があります。"
+    );
+    this.name = "MemberFetchConnectivityError";
+    this.cachedMembers = cachedMembers;
+  }
+}
+
 /**
  * メンバー一覧を取得する。Supabase未設定時はダミーデータ(localStorage保存)を返す。
+ * Supabase設定時に通信エラー等でfetch自体が失敗した場合は、例外を握りつぶさず
+ * MemberFetchConnectivityError(直近のキャッシュ付き)に変換してthrowする。
  */
 export async function fetchMembers(): Promise<Member[]> {
   if (supabase) {
-    const { data, error } = await supabase
-      .from("members")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return ((data ?? []) as Member[]).map(normalizeMember);
+    try {
+      const { data, error } = await supabase
+        .from("members")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const members = ((data ?? []) as Member[]).map(normalizeMember);
+      saveMembersFetchCache(members);
+      return members;
+    } catch (err) {
+      if (isNetworkError(err)) {
+        console.warn(
+          "[members] Supabaseへの接続に失敗したため、ローカルキャッシュへフォールバックします:",
+          err
+        );
+        throw new MemberFetchConnectivityError(loadMembersFetchCache());
+      }
+      throw err;
+    }
   }
   return loadDummyMembers();
 }

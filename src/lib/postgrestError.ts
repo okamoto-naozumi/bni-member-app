@@ -20,3 +20,19 @@ export function extractMissingColumn(error: unknown): string | null {
   }
   return null;
 }
+
+/**
+ * Supabaseへのfetch自体が失敗した場合(ネットワーク切断、Supabase Paused、CORSエラー等)を検知する。
+ * この場合PostgrestErrorではなく素のTypeError("Failed to fetch"等)がthrowされるため、
+ * extractMissingColumn(DBエラーメッセージの解析)とは別に判定する必要がある。
+ */
+export function isNetworkError(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : typeof error === "string"
+        ? error
+        : "";
+  return /failed to fetch|network ?error|load failed/i.test(message);
+}
